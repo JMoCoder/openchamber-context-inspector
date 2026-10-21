@@ -2,6 +2,11 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.0.2] - 2026-10-21
+
+### Changed
+- Settings extension list name is now `Context Inspector` (English), matching official OpenChamber extensions.
+
 ## [1.0.1] - 2026-10-21
 
 ### Added

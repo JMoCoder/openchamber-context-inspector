@@ -1,6 +1,6 @@
 {
   "name": "openchamber-context-inspector",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Cursor-style fine-grained context breakdown for OpenChamber sessions: MCP schemas, native tools, skills, AGENTS.md rules, DCP compression thresholds, and conversation payloads",
   "private": false,
   "type": "module",
@@ -18,7 +18,7 @@
     "contributes": {
       "panel": {
         "id": "context-inspector",
-        "name": "上下文剖析",
+        "name": "Context Inspector",
         "icon": "pie-chart",
         "entry": "panel/index.html"
       },
