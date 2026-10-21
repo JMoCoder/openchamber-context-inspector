@@ -107,6 +107,34 @@
   const pending = new Map();
   let currentSessionId = '';
   let currentDirectory = '';
+  let isZh = true;
+
+  function detectLang(locale) {
+    const l = String(locale || navigator.language || '').toLowerCase();
+    isZh = l.startsWith('zh');
+  }
+  detectLang();
+
+  const L = () =>
+    isZh
+      ? {
+          mcp: 'MCP 工具',
+          native: '原生工具',
+          skills: 'Skills 清单',
+          sys_rules: '系统与规约',
+          tools_io: '工具载荷',
+          conversation: '对话消息',
+          reading: '正在读取上下文构成…',
+        }
+      : {
+          mcp: 'MCP Tools',
+          native: 'Native Tools',
+          skills: 'Skills',
+          sys_rules: 'System & Rules',
+          tools_io: 'Tool Payloads',
+          conversation: 'Conversation',
+          reading: 'Reading context breakdown…',
+        };
 
   function sendToHost(msg) {
     window.parent.postMessage({ channel: CHANNEL, v: VERSION, ...msg }, '*');
@@ -161,6 +189,7 @@
     if (!data || data.channel !== CHANNEL || data.v !== VERSION) return;
     if (data.type === 'ready') {
       if (data.payload?.theme) applyTheme(data.payload.theme);
+      if (data.payload?.locale) detectLang(data.payload.locale);
       currentSessionId = data.payload?.session?.id || '';
       currentDirectory = data.payload?.directory || '';
       void refresh();
@@ -221,45 +250,46 @@
     const total = Math.max(1, summary.totalTokens);
     const byId = Object.fromEntries((categories || []).map((c) => [c.id, c]));
 
+    const i18n = L();
     const rows = [
       {
         id: 'mcp',
-        label: 'MCP 工具',
+        label: i18n.mcp,
         tokens: byId.mcp?.tokens || 0,
         color: TONE_COLORS.mcp,
         tip: byId.mcp?.detail || '',
       },
       {
         id: 'native',
-        label: '原生工具',
+        label: i18n.native,
         tokens: byId.native?.tokens || 0,
         color: TONE_COLORS.native,
         tip: byId.native?.detail || '',
       },
       {
         id: 'skills',
-        label: 'Skills 清单',
+        label: i18n.skills,
         tokens: byId.skills?.tokens || 0,
         color: TONE_COLORS.skills,
         tip: byId.skills?.detail || '',
       },
       {
         id: 'sys_rules',
-        label: '系统与规约',
+        label: i18n.sys_rules,
         tokens: byId.sys_rules?.tokens ?? ((byId.harness?.tokens || 0) + (byId.rules?.tokens || 0)),
         color: TONE_COLORS.sys_rules,
-        tip: '系统基座协议 + AGENTS.md 全局与项目规约',
+        tip: i18n.sys_rules,
       },
       {
         id: 'tools_io',
-        label: '工具载荷',
+        label: i18n.tools_io,
         tokens: byId.tools_io?.tokens || 0,
         color: TONE_COLORS.tools_io,
         tip: byId.tools_io?.detail || '',
       },
       {
         id: 'conversation',
-        label: '对话消息',
+        label: i18n.conversation,
         tokens: byId.conversation?.tokens || 0,
         color: TONE_COLORS.conversation,
         tip: byId.conversation?.detail || '',
@@ -273,7 +303,7 @@
         const pct = (r.tokens / total) * 100;
         const barWidth = r.tokens > 0 ? Math.min(100, Math.max(2, pct)) : 0;
         return `
-          <div class="line" data-open-panel="true" title="${r.tip} · 点击查看详细剖析">
+          <div class="line" data-open-panel="true" title="${r.tip}">
             <span class="what">${r.label}</span>
             <div class="meter"><span style="width:${barWidth.toFixed(1)}%;background:${r.color}"></span></div>
             <span class="value num">${fmtK(r.tokens)} · ${fmtPct(pct)}</span>
@@ -318,7 +348,7 @@
         renderCompact(JSON.parse(res.body));
       }
     } catch {
-      root.innerHTML = `<div class="note">正在读取上下文构成…</div>`;
+      root.innerHTML = `<div class="note">${L().reading}</div>`;
     } finally {
       inflight = false;
     }

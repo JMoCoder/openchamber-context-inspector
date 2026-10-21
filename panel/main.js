@@ -37,7 +37,79 @@
   const pending = new Map();
   let currentSessionId = '';
   let currentDirectory = '';
+  let isZh = true;
   const openGroups = new Set(['mcp', 'conv', 'static']);
+
+  function detectLang(locale) {
+    const l = String(locale || navigator.language || '').toLowerCase();
+    isZh = l.startsWith('zh');
+  }
+  detectLang();
+
+  const L = () =>
+    isZh
+      ? {
+          tools_io: '工具载荷',
+          mcp: 'MCP 工具',
+          native: '原生工具',
+          skills: 'Skills 清单',
+          sys_rules: '系统与规约',
+          conversation: '对话消息',
+          assistantMsgs: '助手消息',
+          userMsgs: '用户消息',
+          grpConv: '会话载荷',
+          grpMcp: 'MCP 服务',
+          grpStatic: '系统与工具基座',
+          toolPrune: '工具修剪',
+          noDcp: '当前会话暂无压缩记录',
+          compressed: '已压缩',
+          blocks: '块',
+          ctxWindow: '上下文窗口',
+          baseline: '基线',
+          cacheRead: '缓存读取',
+          incInput: '增量输入',
+          output: '输出',
+          totalCtx: '总上下文',
+          used: '已用',
+          thresholds: '阈值',
+          softTip: '提醒阈值',
+          midTip: '压缩阈值',
+          hardTip: '强制限额',
+          dcpTitle: '压缩详情',
+          breakdownTitle: '上下文构成',
+          disabledMcp: '已停用 MCP',
+        }
+      : {
+          tools_io: 'Tool Payloads',
+          mcp: 'MCP Tools',
+          native: 'Native Tools',
+          skills: 'Skills',
+          sys_rules: 'System & Rules',
+          conversation: 'Conversation',
+          assistantMsgs: 'Assistant',
+          userMsgs: 'User',
+          grpConv: 'Conversation Payloads',
+          grpMcp: 'MCP Servers',
+          grpStatic: 'System & Baseline',
+          toolPrune: 'Tool Prune',
+          noDcp: 'No compression records in this session',
+          compressed: 'Compressed',
+          blocks: 'blocks',
+          ctxWindow: 'Context Window',
+          baseline: 'Baseline',
+          cacheRead: 'Cache Read',
+          incInput: 'Input',
+          output: 'Output',
+          totalCtx: 'Total Context',
+          used: 'Used',
+          thresholds: 'Thresholds',
+          softTip: 'Nudge',
+          midTip: 'Compress',
+          hardTip: 'Hard Limit',
+          dcpTitle: 'Compression Details',
+          breakdownTitle: 'Context Breakdown',
+          disabledMcp: 'Disabled MCPs',
+        };
 
   function sendToHost(msg) {
     window.parent.postMessage({ channel: CHANNEL, v: VERSION, ...msg }, '*');
@@ -84,6 +156,7 @@
 
     if (data.type === 'ready') {
       if (data.payload?.theme) applyTheme(data.payload.theme);
+      if (data.payload?.locale) detectLang(data.payload.locale);
       currentSessionId = data.payload?.session?.id || '';
       currentDirectory = data.payload?.directory || '';
       void refresh();
@@ -144,20 +217,21 @@
     if (!force && sig === lastPanelSig) return;
     lastPanelSig = sig;
     const total = Math.max(1, summary.totalTokens);
+    const i18n = L();
     const byId = Object.fromEntries((data.categories || []).map((c) => [c.id, c]));
     const unifiedCategories = [
-      { id: 'tools_io', label: '工具载荷', tokens: byId.tools_io?.tokens ?? summary.toolTokens ?? 0 },
-      { id: 'mcp', label: 'MCP 工具', tokens: byId.mcp?.tokens ?? staticInfo.mcpTotalTokens ?? 0 },
-      { id: 'native', label: '原生工具', tokens: byId.native?.tokens ?? staticInfo.nativeToolsTokens ?? 0 },
-      { id: 'skills', label: 'Skills 清单', tokens: byId.skills?.tokens ?? staticInfo.skillsTokens ?? 0 },
+      { id: 'tools_io', label: i18n.tools_io, tokens: byId.tools_io?.tokens ?? summary.toolTokens ?? 0 },
+      { id: 'mcp', label: i18n.mcp, tokens: byId.mcp?.tokens ?? staticInfo.mcpTotalTokens ?? 0 },
+      { id: 'native', label: i18n.native, tokens: byId.native?.tokens ?? staticInfo.nativeToolsTokens ?? 0 },
+      { id: 'skills', label: i18n.skills, tokens: byId.skills?.tokens ?? staticInfo.skillsTokens ?? 0 },
       {
         id: 'sys_rules',
-        label: '系统与规约',
+        label: i18n.sys_rules,
         tokens: byId.sys_rules?.tokens ?? ((staticInfo.harnessTokens || 0) + (staticInfo.rulesTokens || 0)),
       },
       {
         id: 'conversation',
-        label: '对话消息',
+        label: i18n.conversation,
         tokens: byId.conversation?.tokens ?? ((summary.userTokens || 0) + (summary.assistantTokens || 0)),
       },
     ].sort((a, b) => b.tokens - a.tokens);
@@ -198,9 +272,9 @@
       .join('');
 
     const convItems = [
-      { name: '工具载荷', detail: `${session?.toolCallCount || 0} calls`, tokens: summary.toolTokens || 0 },
-      { name: '助手消息', detail: `${session?.assistantCount || 0} messages`, tokens: summary.assistantTokens || 0 },
-      { name: '用户消息', detail: `${session?.userCount || 0} messages`, tokens: summary.userTokens || 0 },
+      { name: i18n.tools_io, detail: `${session?.toolCallCount || 0} calls`, tokens: summary.toolTokens || 0 },
+      { name: i18n.assistantMsgs, detail: `${session?.assistantCount || 0} messages`, tokens: summary.assistantTokens || 0 },
+      { name: i18n.userMsgs, detail: `${session?.userCount || 0} messages`, tokens: summary.userTokens || 0 },
     ].sort((a, b) => b.tokens - a.tokens);
 
     const convRowsHtml = convItems
@@ -220,9 +294,9 @@
       .join('');
 
     const staticItems = [
-      { name: '原生工具', detail: `${staticInfo.nativeToolsCount} tools`, tokens: staticInfo.nativeToolsTokens },
-      { name: 'Skills 清单', detail: `${staticInfo.skillsCount} skills`, tokens: staticInfo.skillsTokens },
-      { name: '系统与规约', detail: 'Harness + AGENTS.md', tokens: (staticInfo.harnessTokens || 0) + (staticInfo.rulesTokens || 0) },
+      { name: i18n.native, detail: `${staticInfo.nativeToolsCount} tools`, tokens: staticInfo.nativeToolsTokens },
+      { name: i18n.skills, detail: `${staticInfo.skillsCount} skills`, tokens: staticInfo.skillsTokens },
+      { name: i18n.sys_rules, detail: 'Harness + AGENTS.md', tokens: (staticInfo.harnessTokens || 0) + (staticInfo.rulesTokens || 0) },
     ].sort((a, b) => b.tokens - a.tokens);
 
     const staticSum = staticItems.reduce((a, b) => a + b.tokens, 0);
@@ -245,7 +319,7 @@
     const groups = [
       {
         id: 'conv',
-        title: '会话载荷',
+        title: i18n.grpConv,
         count: (session?.userCount || 0) + (session?.assistantCount || 0),
         color: 'var(--oc-warning)',
         tokens: summary.dynamicTokens || 0,
@@ -253,7 +327,7 @@
       },
       {
         id: 'mcp',
-        title: 'MCP 服务',
+        title: i18n.grpMcp,
         count: staticInfo.activeMcps.length,
         color: 'var(--oc-info)',
         tokens: staticInfo.mcpTotalTokens,
@@ -261,7 +335,7 @@
       },
       {
         id: 'static',
-        title: '系统与工具基座',
+        title: i18n.grpStatic,
         count: 3,
         color: 'var(--oc-primary)',
         tokens: staticSum,
@@ -310,54 +384,54 @@
       .join('');
     const dcpToolRowHtml =
       (dcp?.prunedToolCount || 0) > 0
-        ? `<div class="dcp-row"><span class="muted">工具修剪 (${dcp.prunedToolCount})</span><span class="num">-${fmtK(dcp.prunedToolTokens)}</span></div>`
+        ? `<div class="dcp-row"><span class="muted">${i18n.toolPrune} (${dcp.prunedToolCount})</span><span class="num">-${fmtK(dcp.prunedToolTokens)}</span></div>`
         : '';
-    const dcpEmptyHtml = !dcpRowsHtml && !dcpToolRowHtml ? `<div class="sub">当前会话暂无压缩记录</div>` : '';
+    const dcpEmptyHtml = !dcpRowsHtml && !dcpToolRowHtml ? `<div class="sub">${i18n.noDcp}</div>` : '';
     const dcpSummaryRight =
       (dcp?.totalSavedTokens || 0) > 0
-        ? `已压缩 ${fmtK(dcp.totalSavedTokens)}`
-        : `${dcpBlocks.length} 块`;
+        ? `${i18n.compressed} ${fmtK(dcp.totalSavedTokens)}`
+        : `${dcpBlocks.length} ${i18n.blocks}`;
 
     root.innerHTML = `
       <div class="grid">
         <div class="card">
           <div class="card-top">
-            <span class="label">上下文窗口</span>
+            <span class="label">${i18n.ctxWindow}</span>
             <span class="sub num">${fmtK(summary.totalTokens)}</span>
           </div>
           <span class="big num">${summary.usagePercent}%</span>
-          <span class="sub num">of ${fmt(summary.contextLimit)} · 基线 ${fmtK(summary.staticBaselineTokens)}</span>
+          <span class="sub num">of ${fmt(summary.contextLimit)} · ${i18n.baseline} ${fmtK(summary.staticBaselineTokens)}</span>
         </div>
         <div class="card">
           <div class="card-top">
-            <span class="label">缓存读取</span>
+            <span class="label">${i18n.cacheRead}</span>
             <span class="sub num">${fmtK(summary.cacheRead)}</span>
           </div>
           <span class="big num">${summary.cacheHitRate}%</span>
-          <span class="sub num">增量输入 ${fmt(summary.nonCachedInput)} · 输出 ${fmt(summary.outputTokens)}</span>
+          <span class="sub num">${i18n.incInput} ${fmt(summary.nonCachedInput)} · ${i18n.output} ${fmt(summary.outputTokens)}</span>
         </div>
       </div>
 
       <div class="card">
         <div class="card-top">
-          <span class="label">总上下文</span>
+          <span class="label">${i18n.totalCtx}</span>
           <span class="sub num">${fmt(summary.totalTokens)} / ${fmt(summary.contextLimit)}</span>
         </div>
         <div class="ctx-track">
           <span class="ctx-fill" style="width:${totalBarWidth.toFixed(1)}%"></span>
-          <span class="ctx-tick" style="left:${minPct}%" title="提醒阈值 ${minPct}%"></span>
-          <span class="ctx-tick mid" style="left:${maxPct}%" title="压缩阈值 ${maxPct}%"></span>
-          <span class="ctx-tick max" style="left:${hardPct}%" title="强制限额 ${hardPct}%"></span>
+          <span class="ctx-tick" style="left:${minPct}%" title="${i18n.softTip} ${minPct}%"></span>
+          <span class="ctx-tick mid" style="left:${maxPct}%" title="${i18n.midTip} ${maxPct}%"></span>
+          <span class="ctx-tick max" style="left:${hardPct}%" title="${i18n.hardTip} ${hardPct}%"></span>
         </div>
         <div class="card-top" style="margin-top:2px">
-          <span class="sub num">已用 ${summary.usagePercent}%</span>
-          <span class="sub num">阈值 ${minPct}% / ${maxPct}% / ${hardPct}%</span>
+          <span class="sub num">${i18n.used} ${summary.usagePercent}%</span>
+          <span class="sub num">${i18n.thresholds} ${minPct}% / ${maxPct}% / ${hardPct}%</span>
         </div>
       </div>
 
       <div class="card">
         <div class="card-top">
-          <span class="label">压缩详情</span>
+          <span class="label">${i18n.dcpTitle}</span>
           <span class="sub num">${dcpSummaryRight}</span>
         </div>
         <div class="dcp-list">
@@ -369,7 +443,7 @@
 
       <div class="card">
         <div class="card-top">
-          <span class="label">上下文构成</span>
+          <span class="label">${i18n.breakdownTitle}</span>
           <span class="sub num">${fmt(summary.totalTokens)} tokens</span>
         </div>
         <div class="meter-list">${meterListHtml}</div>
@@ -377,7 +451,7 @@
 
       <div class="card">
         <div class="card-top">
-          <span class="label">已停用 MCP</span>
+          <span class="label">${i18n.disabledMcp}</span>
           <span class="sub num">${staticInfo.disabledMcps.length}</span>
         </div>
         <div class="ports">${disabledPills || '<span class="sub">None</span>'}</div>
