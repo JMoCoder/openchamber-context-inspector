@@ -1,0 +1,37 @@
+{
+  "name": "openchamber-context-inspector",
+  "version": "1.0.0",
+  "description": "Cursor-style fine-grained context breakdown for OpenChamber sessions: MCP schemas, native tools, skills, AGENTS.md rules, DCP compression thresholds, and conversation payloads",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JMoCoder/openchamber-context-inspector.git"
+  },
+  "homepage": "https://github.com/JMoCoder/openchamber-context-inspector",
+  "openchamber": {
+    "apiVersion": 1,
+    "engines": {
+      "openchamber": ">=2.0.0"
+    },
+    "contributes": {
+      "panel": {
+        "id": "context-inspector",
+        "name": "上下文剖析",
+        "icon": "pie-chart",
+        "entry": "panel/index.html"
+      },
+      "statusSection": {
+        "entry": "status/index.html",
+        "title": "上下文构成",
+        "height": 144,
+        "defaultExpanded": true
+      },
+      "service": {
+        "entry": "service/main.js",
+        "runtime": "host"
+      }
+    }
+  }
+}
