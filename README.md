@@ -48,6 +48,7 @@ Works on **Linux, macOS, and Windows** (OpenChamber Desktop & Web `>= 2.0.0`).
 | :--- | :--- | :--- |
 | Live MCP Status | OpenCode `/api/mcp` via `host.request` + merged `opencode.json` files | Every `1s` |
 | Session Token Ledger | `~/.local/share/opencode/opencode.db` (`session_v2`, `session_message`) via `node:sqlite` | Every `1s` |
+| Context window | Live OpenCode `GET /api/model` `limit.context` for `providerID/modelID`. Cached 10s; refreshed at once if the current model is missing | With each inspect |
 | DCP Compression State | `~/.config/opencode/dcp.jsonc` + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
 | Skills & Rules | `~/.agents/skills/*/SKILL.md` + `~/.config/opencode/AGENTS.md` + project `AGENTS.md` | Cached `5s` |
 
@@ -64,6 +65,8 @@ openchamber-context-inspector/
 ├── status/
 │   ├── index.html       # Work Status section container
 │   └── main.js          # Compact 6-bar sorted status renderer
+├── shared/
+│   └── limits.js        # Catalog index and context-limit lookup
 ├── service/
 │   └── main.js          # Host service (node:sqlite + MCP/Skill/DCP inspector)
 ├── CHANGELOG.md

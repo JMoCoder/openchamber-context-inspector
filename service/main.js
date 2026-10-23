@@ -350,11 +350,6 @@ async function querySessionDb(sessionId) {
       }
     }
 
-    let contextLimit = 200000;
-    const modelId = String(modelInfo.id || '').toLowerCase();
-    if (modelId.includes('gemini')) contextLimit = 1048576;
-    else if (modelId.includes('grok')) contextLimit = 500000;
-
     return {
       found: true,
       sessionId: row.id,
@@ -363,7 +358,6 @@ async function querySessionDb(sessionId) {
       model: modelInfo,
       createdAt: row.time_created,
       updatedAt: row.time_updated,
-      contextLimit,
       cost: row.cost || 0,
       userCount,
       assistantCount,
@@ -379,6 +373,19 @@ async function querySessionDb(sessionId) {
     dbConn = null;
     return { found: false, error: String(err) };
   }
+}
+
+const MAX_CONTEXT = 100_000_000;
+
+function postedContextLimit(modelInfo, modelLimits) {
+  if (!modelLimits || typeof modelLimits !== 'object' || Array.isArray(modelLimits)) return null;
+  const providerID = String(modelInfo?.providerID || '').trim();
+  const id = String(modelInfo?.id || modelInfo?.modelID || '').trim();
+  if (!providerID || !id) return null;
+  const raw = modelLimits[`${providerID}/${id}`];
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_CONTEXT) return null;
+  return Math.round(n);
 }
 
 const sendJson = (res, status, data) => {
@@ -415,6 +422,7 @@ const server = http.createServer(async (req, res) => {
     let sessionId = url.searchParams.get('sessionId') || '';
     let directory = url.searchParams.get('directory') || '';
     let liveMcps = null;
+    let modelLimits = null;
 
     if (req.method === 'POST') {
       try {
@@ -424,6 +432,9 @@ const server = http.createServer(async (req, res) => {
           if (parsed.sessionId) sessionId = parsed.sessionId;
           if (parsed.directory) directory = parsed.directory;
           if (Array.isArray(parsed.liveMcps)) liveMcps = parsed.liveMcps;
+          if (parsed.modelLimits && typeof parsed.modelLimits === 'object' && !Array.isArray(parsed.modelLimits)) {
+            modelLimits = parsed.modelLimits;
+          }
         }
       } catch {}
     }
@@ -503,6 +514,11 @@ const server = http.createServer(async (req, res) => {
     ].sort((a, b) => b.tokens - a.tokens);
 
     const dcp = inspectDcp(sessionData?.sessionId || sessionId);
+    const contextLimit = postedContextLimit(sessionData?.model, modelLimits);
+    const usagePercent =
+      contextLimit == null
+        ? null
+        : Math.round((displayTotal / contextLimit) * 1000) / 10;
 
     sendJson(res, 200, {
       at: Date.now(),
@@ -521,9 +537,9 @@ const server = http.createServer(async (req, res) => {
         nonCachedInput,
         outputTokens: lastTok?.output || 0,
         cacheHitRate,
-        contextLimit: sessionData?.contextLimit || 200000,
-        usagePercent:
-          Math.round((displayTotal / Math.max(1, sessionData?.contextLimit || 200000)) * 1000) / 10,
+        contextLimit,
+        contextLimitSource: contextLimit == null ? 'unknown' : 'catalog',
+        usagePercent,
       },
       categories,
     });

@@ -75,6 +75,7 @@
           softTip: '提醒阈值',
           midTip: '压缩阈值',
           hardTip: '强制限额',
+          unknownWindow: '未知',
           dcpTitle: '压缩详情',
           breakdownTitle: '上下文构成',
           disabledMcp: '已停用 MCP',
@@ -106,6 +107,7 @@
           softTip: 'Nudge',
           midTip: 'Compress',
           hardTip: 'Hard Limit',
+          unknownWindow: 'Unknown',
           dcpTitle: 'Compression Details',
           breakdownTitle: 'Context Breakdown',
           disabledMcp: 'Disabled MCPs',
@@ -371,7 +373,10 @@
     const minPct = dcp?.minPct ?? 55;
     const maxPct = dcp?.maxPct ?? 75;
     const hardPct = 85;
-    const totalBarWidth = Math.min(100, Math.max(1, summary.usagePercent || 0));
+    const limitKnown = Number.isFinite(summary.contextLimit) && summary.contextLimit > 0;
+    const usageLabel = limitKnown ? `${summary.usagePercent}%` : i18n.unknownWindow;
+    const limitLabel = limitKnown ? fmt(summary.contextLimit) : i18n.unknownWindow;
+    const totalBarWidth = limitKnown ? Math.min(100, Math.max(0, summary.usagePercent || 0)) : 0;
     const dcpBlocks = dcp?.blocks || [];
     const dcpRowsHtml = dcpBlocks
       .map(
@@ -399,8 +404,8 @@
             <span class="label">${i18n.ctxWindow}</span>
             <span class="sub num">${fmtK(summary.totalTokens)}</span>
           </div>
-          <span class="big num">${summary.usagePercent}%</span>
-          <span class="sub num">of ${fmt(summary.contextLimit)} · ${i18n.baseline} ${fmtK(summary.staticBaselineTokens)}</span>
+          <span class="big num">${usageLabel}</span>
+          <span class="sub num">of ${limitLabel} · ${i18n.baseline} ${fmtK(summary.staticBaselineTokens)}</span>
         </div>
         <div class="card">
           <div class="card-top">
@@ -415,7 +420,7 @@
       <div class="card">
         <div class="card-top">
           <span class="label">${i18n.totalCtx}</span>
-          <span class="sub num">${fmt(summary.totalTokens)} / ${fmt(summary.contextLimit)}</span>
+          <span class="sub num">${fmt(summary.totalTokens)} / ${limitLabel}</span>
         </div>
         <div class="ctx-track">
           <span class="ctx-fill" style="width:${totalBarWidth.toFixed(1)}%"></span>
@@ -424,7 +429,7 @@
           <span class="ctx-tick max" style="left:${hardPct}%" title="${i18n.hardTip} ${hardPct}%"></span>
         </div>
         <div class="card-top" style="margin-top:2px">
-          <span class="sub num">${i18n.used} ${summary.usagePercent}%</span>
+          <span class="sub num">${i18n.used} ${usageLabel}</span>
           <span class="sub num">${i18n.thresholds} ${minPct}% / ${maxPct}% / ${hardPct}%</span>
         </div>
       </div>
@@ -486,6 +491,36 @@
     if (btn) btn.addEventListener('click', () => { lastPanelSig = ''; void refresh(); });
   }
 
+  const catalog = globalThis.ContextLimits.createCatalogCache(hostApiRequest, 10000);
+
+  async function inspectWithCatalog(liveMcps) {
+    let modelLimits = null;
+    try {
+      modelLimits = await catalog.load(false);
+    } catch {}
+    const ask = (limits) =>
+      serviceRequest('/inspect', {
+        sessionId: currentSessionId,
+        directory: currentDirectory,
+        liveMcps,
+        modelLimits: limits,
+      });
+    let res = await ask(modelLimits);
+    if (!res || res.status !== 200 || !res.body) return null;
+    let data = JSON.parse(res.body);
+    const model = data.session?.model;
+    if (data.summary?.contextLimitSource === 'unknown' && model?.providerID && model?.id) {
+      try {
+        const fresh = await catalog.load(true);
+        if (globalThis.ContextLimits.lookupContextLimit(fresh, model)) {
+          res = await ask(fresh);
+          if (res && res.status === 200 && res.body) data = JSON.parse(res.body);
+        }
+      } catch {}
+    }
+    return data;
+  }
+
   let inflight = false;
   async function refresh() {
     if (inflight || document.hidden) return;
@@ -500,14 +535,8 @@
         }
       } catch {}
 
-      const res = await serviceRequest('/inspect', {
-        sessionId: currentSessionId,
-        directory: currentDirectory,
-        liveMcps,
-      });
-      if (res && res.status === 200 && res.body) {
-        renderData(JSON.parse(res.body));
-      }
+      const data = await inspectWithCatalog(liveMcps);
+      if (data) renderData(data);
     } catch {} finally {
       inflight = false;
     }

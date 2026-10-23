@@ -2,6 +2,13 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.1.0] - 2026-10-23
+
+### Changed
+- Context window now comes from the live OpenCode model catalog (`GET /api/model` → `limit.context`), keyed by `providerID/modelID`.
+- Catalog is cached for 10 seconds and refreshed immediately when the current model is missing, so provider limit edits and newly added models show up without a plugin change.
+- Removed the model-name heuristic (`200000` / `gemini` / `grok`). An unresolved window is shown as unknown instead of a fabricated limit.
+
 ## [1.0.2] - 2026-10-21
 
 ### Changed

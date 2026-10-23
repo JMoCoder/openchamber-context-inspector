@@ -325,6 +325,36 @@
     });
   }
 
+  const catalog = globalThis.ContextLimits.createCatalogCache(hostApiRequest, 10000);
+
+  async function inspectWithCatalog(liveMcps) {
+    let modelLimits = null;
+    try {
+      modelLimits = await catalog.load(false);
+    } catch {}
+    const ask = (limits) =>
+      serviceRequest('/inspect', {
+        sessionId: currentSessionId,
+        directory: currentDirectory,
+        liveMcps,
+        modelLimits: limits,
+      });
+    let res = await ask(modelLimits);
+    if (!res || res.status !== 200 || !res.body) return null;
+    let data = JSON.parse(res.body);
+    const model = data.session?.model;
+    if (data.summary?.contextLimitSource === 'unknown' && model?.providerID && model?.id) {
+      try {
+        const fresh = await catalog.load(true);
+        if (globalThis.ContextLimits.lookupContextLimit(fresh, model)) {
+          res = await ask(fresh);
+          if (res && res.status === 200 && res.body) data = JSON.parse(res.body);
+        }
+      } catch {}
+    }
+    return data;
+  }
+
   let inflight = false;
   async function refresh() {
     if (inflight || document.hidden) return;
@@ -339,14 +369,8 @@
         }
       } catch {}
 
-      const res = await serviceRequest('/inspect', {
-        sessionId: currentSessionId,
-        directory: currentDirectory,
-        liveMcps,
-      });
-      if (res && res.status === 200 && res.body) {
-        renderCompact(JSON.parse(res.body));
-      }
+      const data = await inspectWithCatalog(liveMcps);
+      if (data) renderCompact(data);
     } catch {
       root.innerHTML = `<div class="note">${L().reading}</div>`;
     } finally {
