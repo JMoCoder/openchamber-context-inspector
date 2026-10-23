@@ -2,6 +2,11 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.1.1] - 2026-10-23
+
+### Fixed
+- Context window is resolved by the extension service via the local `opencode api`, the same catalog the official sidebar reads. `host.request` only proxies an extension integration and cannot see OpenCode models, which made every window show as unknown.
+
 ## [1.1.0] - 2026-10-23
 
 ### Changed

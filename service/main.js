@@ -2,7 +2,9 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { indexModelLimits, lookupContextLimit } from '../shared/model-limits.mjs';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT || process.env.OPENCHAMBER_AGENT_PORT);
 const token = process.env.OPENCHAMBER_SERVICE_TOKEN || process.env.OPENCHAMBER_AGENT_TOKEN || '';
@@ -375,17 +377,61 @@ async function querySessionDb(sessionId) {
   }
 }
 
-const MAX_CONTEXT = 100_000_000;
+const CATALOG_TTL_MS = 10_000;
+let catalogLimits = null;
+let catalogFetchedAt = 0;
+let catalogInflight = null;
 
-function postedContextLimit(modelInfo, modelLimits) {
-  if (!modelLimits || typeof modelLimits !== 'object' || Array.isArray(modelLimits)) return null;
-  const providerID = String(modelInfo?.providerID || '').trim();
-  const id = String(modelInfo?.id || modelInfo?.modelID || '').trim();
-  if (!providerID || !id) return null;
-  const raw = modelLimits[`${providerID}/${id}`];
-  const n = typeof raw === 'number' ? raw : Number(raw);
-  if (!Number.isFinite(n) || n <= 0 || n > MAX_CONTEXT) return null;
-  return Math.round(n);
+function opencodeBinary() {
+  const candidates = [
+    process.env.OPENCODE_BIN,
+    path.join(HOME, '.local', 'bin', 'opencode'),
+    '/opt/OpenChamber/resources/opencode-cli/opencode',
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch {}
+  }
+  return 'opencode';
+}
+
+function loadModelCatalog(force = false) {
+  if (!force && catalogLimits && Date.now() - catalogFetchedAt < CATALOG_TTL_MS) {
+    return Promise.resolve(catalogLimits);
+  }
+  if (catalogInflight) return catalogInflight;
+  catalogInflight = new Promise((resolve) => {
+    execFile(
+      opencodeBinary(),
+      ['api', 'get', '/api/model'],
+      { timeout: 20_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+      (err, stdout) => {
+        catalogInflight = null;
+        if (!err && stdout) {
+          try {
+            const limits = indexModelLimits(JSON.parse(stdout));
+            if (Object.keys(limits).length > 0) {
+              catalogLimits = limits;
+              catalogFetchedAt = Date.now();
+            }
+          } catch {}
+        }
+        resolve(catalogLimits);
+      },
+    );
+  });
+  return catalogInflight;
+}
+
+async function resolveContextLimit(modelInfo) {
+  let limits = await loadModelCatalog(false);
+  let limit = lookupContextLimit(limits, modelInfo);
+  if (limit == null && modelInfo?.providerID && (modelInfo.id || modelInfo.modelID)) {
+    limits = await loadModelCatalog(true);
+    limit = lookupContextLimit(limits, modelInfo);
+  }
+  return limit;
 }
 
 const sendJson = (res, status, data) => {
@@ -422,7 +468,6 @@ const server = http.createServer(async (req, res) => {
     let sessionId = url.searchParams.get('sessionId') || '';
     let directory = url.searchParams.get('directory') || '';
     let liveMcps = null;
-    let modelLimits = null;
 
     if (req.method === 'POST') {
       try {
@@ -432,9 +477,6 @@ const server = http.createServer(async (req, res) => {
           if (parsed.sessionId) sessionId = parsed.sessionId;
           if (parsed.directory) directory = parsed.directory;
           if (Array.isArray(parsed.liveMcps)) liveMcps = parsed.liveMcps;
-          if (parsed.modelLimits && typeof parsed.modelLimits === 'object' && !Array.isArray(parsed.modelLimits)) {
-            modelLimits = parsed.modelLimits;
-          }
         }
       } catch {}
     }
@@ -514,7 +556,7 @@ const server = http.createServer(async (req, res) => {
     ].sort((a, b) => b.tokens - a.tokens);
 
     const dcp = inspectDcp(sessionData?.sessionId || sessionId);
-    const contextLimit = postedContextLimit(sessionData?.model, modelLimits);
+    const contextLimit = await resolveContextLimit(sessionData?.model);
     const usagePercent =
       contextLimit == null
         ? null
