@@ -67,6 +67,9 @@
           ctxWindow: '上下文窗口',
           baseline: '基线',
           cacheRead: '缓存读取',
+          cacheRate: '最近一次缓存命中率',
+          cacheWrite: '缓存写入',
+          cacheRateTip: '最近一条有输入用量的助手记录：缓存读取 ÷（非缓存输入 + 缓存读取 + 缓存写入）。不是会话或时间范围累计值。',
           incInput: '增量输入',
           output: '输出',
           totalCtx: '总上下文',
@@ -99,6 +102,9 @@
           ctxWindow: 'Context Window',
           baseline: 'Baseline',
           cacheRead: 'Cache Read',
+          cacheRate: 'Latest Cache Hit Rate',
+          cacheWrite: 'Cache Write',
+          cacheRateTip: 'Latest assistant record with input usage: cache read / (uncached input + cache read + cache write). Not a session or date-range aggregate.',
           incInput: 'Input',
           output: 'Output',
           totalCtx: 'Total Context',
@@ -409,10 +415,11 @@
         </div>
         <div class="card">
           <div class="card-top">
-            <span class="label">${i18n.cacheRead}</span>
+            <span class="label" title="${i18n.cacheRateTip}">${i18n.cacheRate}</span>
             <span class="sub num">${fmtK(summary.cacheRead)}</span>
           </div>
-          <span class="big num">${summary.cacheHitRate}%</span>
+          <span class="big num">${summary.cacheHitRate == null ? '—' : `${summary.cacheHitRate}%`}</span>
+          <span class="sub num">${i18n.cacheRead} ${fmt(summary.cacheRead)} · ${i18n.cacheWrite} ${fmt(summary.cacheWrite || 0)}</span>
           <span class="sub num">${i18n.incInput} ${fmt(summary.nonCachedInput)} · ${i18n.output} ${fmt(summary.outputTokens)}</span>
         </div>
       </div>

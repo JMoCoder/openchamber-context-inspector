@@ -2,6 +2,18 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.1.2] - 2026-10-26
+
+### Fixed
+- Include cache writes in the cache hit rate denominator, matching OpenChamber's formula: `cache.read / (input + cache.read + cache.write)`.
+- Show an em dash instead of a misleading 0% when no input usage is available.
+
+### Changed
+- Label the cache card as **Latest Cache Hit Rate**, explain its latest-record scope in Chinese and English, and display cache writes alongside reads. OpenChamber's official Usage Statistics remains a date-range/project aggregate and may show a different value.
+
+### Added
+- Dependency-free regression tests for cache writes, missing/zero usage, rounding, and exclusion of output/reasoning tokens.
+
 ## [1.1.1] - 2026-10-23
 
 ### Fixed

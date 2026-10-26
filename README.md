@@ -13,7 +13,7 @@ See exactly where your context budget goes in real time: **MCP server schemas & 
   - 6 individual meter bars (`Tool Payloads`, `MCP Tools`, `Native Tools`, `Skills`, `System & Rules`, `Conversation`), dynamically sorted from highest to lowest token footprint every second.
   - Click any row to open the full Context Inspector drawer panel.
 - **Full Inspector Panel**:
-  - **Top KPI Cards**: Context window usage percentage (`%` + total/limit + empty-session baseline) and Prompt Cache hit rate (`%` + cached read / incremental input / output tokens).
+  - **Top KPI Cards**: Context window usage percentage (`%` + total/limit + empty-session baseline) and Latest Cache Hit Rate (`%` + cache read / cache write / incremental input / output tokens).
   - **Total Context & Threshold Bar**: Visualizes current usage against 3 configurable DCP / system watermarks (`55%` soft nudge, `75%` compress trigger, `85%` hard limit).
   - **DCP Compression Details**: Live readout from `@tarquinen/opencode-dcp` storage (`~/.local/share/opencode/storage/plugin/dcp/<sessionId>.json`), showing total compressed tokens, active `@b1@` range blocks (`before → after`), and auto-pruned tool outputs.
   - **Context Breakdown Card**: Individual horizontal meter bars matching the Work Status style.
@@ -44,6 +44,16 @@ Works on **Linux, macOS, and Windows** (OpenChamber Desktop & Web `>= 2.0.0`).
 
 ## How It Works
 
+### Cache hit rate
+
+The cache card uses the latest assistant record with input usage in the current session, not a session-wide aggregate. It follows OpenChamber's input-token formula:
+
+```text
+cache.read / (input + cache.read + cache.write) × 100%
+```
+
+`input` is uncached input. Output and reasoning tokens are excluded. With no input usage the rate is shown as `—`. OpenChamber's official Usage Statistics applies this formula to cumulative tokens within the selected date range and project, so the two cards need not match even after this fix. If cache writes are zero, this correction alone does not lower the previous rate.
+
 | Data Source | Path / Endpoint | Refresh Rate |
 | :--- | :--- | :--- |
 | Live MCP Status | OpenCode `/api/mcp` via `host.request` + merged `opencode.json` files | Every `1s` |
@@ -67,7 +77,9 @@ openchamber-context-inspector/
 │   └── main.js          # Compact 6-bar sorted status renderer
 ├── shared/
 │   ├── model-limits.mjs # Catalog index and context-limit lookup
-│   └── limits.test.mjs  # Lookup tests
+│   ├── limits.test.mjs  # Lookup tests
+│   ├── cache-usage.mjs  # Official input-token cache ratio (latest record)
+│   └── cache-usage.test.mjs # Cache ratio regression tests
 ├── service/
 │   └── main.js          # Host service (node:sqlite + MCP/Skill/DCP inspector)
 ├── CHANGELOG.md

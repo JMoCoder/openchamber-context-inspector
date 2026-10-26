@@ -5,6 +5,7 @@ import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { indexModelLimits, lookupContextLimit } from '../shared/model-limits.mjs';
+import { cacheHitRate } from '../shared/cache-usage.mjs';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT || process.env.OPENCHAMBER_AGENT_PORT);
 const token = process.env.OPENCHAMBER_SERVICE_TOKEN || process.env.OPENCHAMBER_AGENT_TOKEN || '';
@@ -329,7 +330,7 @@ async function querySessionDb(sessionId) {
       } else if (m.type === 'assistant') {
         assistantCount++;
         const tok = d.tokens;
-        if (tok && typeof tok === 'object' && ((tok.input || 0) > 0 || (tok.cache?.read || 0) > 0)) {
+        if (tok && typeof tok === 'object' && ((tok.input || 0) > 0 || (tok.cache?.read || 0) > 0 || (tok.cache?.write || 0) > 0)) {
           lastTokens = tok;
         }
         if (Array.isArray(d.content)) {
@@ -491,9 +492,8 @@ const server = http.createServer(async (req, res) => {
       : 0;
 
     const cacheRead = lastTok?.cache?.read || 0;
+    const cacheWrite = lastTok?.cache?.write || 0;
     const nonCachedInput = lastTok?.input || 0;
-    const cacheHitRate =
-      actualWindowTokens > 0 ? Math.round((cacheRead / Math.max(1, cacheRead + nonCachedInput)) * 1000) / 10 : 0;
 
     const rawUser = sessionData?.rawEstimate?.userTokens || 0;
     const rawAssistant = sessionData?.rawEstimate?.assistantTokens || 0;
@@ -576,9 +576,10 @@ const server = http.createServer(async (req, res) => {
         assistantTokens: effectiveAssistantTokens,
         toolTokens: effectiveToolTokens,
         cacheRead,
+        cacheWrite,
         nonCachedInput,
         outputTokens: lastTok?.output || 0,
-        cacheHitRate,
+        cacheHitRate: cacheHitRate(lastTok),
         contextLimit,
         contextLimitSource: contextLimit == null ? 'unknown' : 'catalog',
         usagePercent,
