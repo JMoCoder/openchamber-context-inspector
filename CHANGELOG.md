@@ -2,6 +2,15 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.1.3] - 2026-10-29
+
+### Fixed
+- Replace the remaining hardcoded Chinese Work Status heading, document titles, and service category labels with English defaults.
+- Set panel and status document metadata to English while preserving the existing host/browser locale detection and localized English/Chinese content.
+
+### Contributors
+- Thanks to [@herbkk](https://github.com/herbkk) for [#1](https://github.com/JMoCoder/openchamber-context-inspector/pull/1).
+
 ## [1.1.2] - 2026-10-26
 
 ### Fixed
