@@ -107,7 +107,7 @@
   const pending = new Map();
   let currentSessionId = '';
   let currentDirectory = '';
-  let isZh = true;
+  let isZh = false;
 
   function detectLang(locale) {
     const l = String(locale || navigator.language || '').toLowerCase();

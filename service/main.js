@@ -525,32 +525,32 @@ const server = http.createServer(async (req, res) => {
     const categories = [
       {
         id: 'tools_io',
-        label: '工具载荷',
+        label: 'Tool Payloads',
         tokens: effectiveToolTokens,
       },
       {
         id: 'mcp',
-        label: 'MCP 工具',
+        label: 'MCP Tools',
         tokens: staticInfo.mcpTotalTokens,
       },
       {
         id: 'native',
-        label: '原生工具',
+        label: 'Native Tools',
         tokens: staticInfo.nativeToolsTokens,
       },
       {
         id: 'skills',
-        label: 'Skills 清单',
+        label: 'Skills',
         tokens: staticInfo.skillsTokens,
       },
       {
         id: 'sys_rules',
-        label: '系统与规约',
+        label: 'System & Rules',
         tokens: staticInfo.harnessTokens + staticInfo.rulesTokens,
       },
       {
         id: 'conversation',
-        label: '对话消息',
+        label: 'Conversation',
         tokens: effectiveUserTokens + effectiveAssistantTokens,
       },
     ].sort((a, b) => b.tokens - a.tokens);

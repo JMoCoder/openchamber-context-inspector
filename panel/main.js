@@ -37,7 +37,7 @@
   const pending = new Map();
   let currentSessionId = '';
   let currentDirectory = '';
-  let isZh = true;
+  let isZh = false;
   const openGroups = new Set(['mcp', 'conv', 'static']);
 
   function detectLang(locale) {
