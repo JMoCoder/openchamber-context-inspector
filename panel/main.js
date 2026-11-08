@@ -65,7 +65,11 @@
           compressed: '已压缩',
           blocks: '块',
           ctxWindow: '上下文窗口',
+          limit: '上限',
+          remaining: '剩余',
           baseline: '基线',
+          dynamic: '动态',
+          dynamicTip: '窗口总量减去基线，含用户消息、助手消息和工具载荷。',
           cacheRead: '缓存读取',
           cacheRate: '最近一次缓存命中率',
           cacheWrite: '缓存写入',
@@ -100,7 +104,11 @@
           compressed: 'Compressed',
           blocks: 'blocks',
           ctxWindow: 'Context Window',
+          limit: 'Limit',
+          remaining: 'Remaining',
           baseline: 'Baseline',
+          dynamic: 'Dynamic',
+          dynamicTip: 'Window total minus the baseline: user messages, assistant messages, and tool payloads.',
           cacheRead: 'Cache Read',
           cacheRate: 'Latest Cache Hit Rate',
           cacheWrite: 'Cache Write',
@@ -382,6 +390,7 @@
     const limitKnown = Number.isFinite(summary.contextLimit) && summary.contextLimit > 0;
     const usageLabel = limitKnown ? `${summary.usagePercent}%` : i18n.unknownWindow;
     const limitLabel = limitKnown ? fmt(summary.contextLimit) : i18n.unknownWindow;
+    const remainingLabel = limitKnown ? fmt(summary.contextLimit - (summary.totalTokens || 0)) : '—';
     const totalBarWidth = limitKnown ? Math.min(100, Math.max(0, summary.usagePercent || 0)) : 0;
     const dcpBlocks = dcp?.blocks || [];
     const dcpRowsHtml = dcpBlocks
@@ -411,7 +420,8 @@
             <span class="sub num">${fmtK(summary.totalTokens)}</span>
           </div>
           <span class="big num">${usageLabel}</span>
-          <span class="sub num">of ${limitLabel} · ${i18n.baseline} ${fmtK(summary.staticBaselineTokens)}</span>
+          <span class="sub num">${i18n.limit} ${limitLabel} · ${i18n.remaining} ${remainingLabel}</span>
+          <span class="sub num" title="${i18n.dynamicTip}">${i18n.baseline} ${fmt(summary.staticBaselineTokens || 0)} · ${i18n.dynamic} ${fmt(summary.dynamicTokens || 0)}</span>
         </div>
         <div class="card">
           <div class="card-top">

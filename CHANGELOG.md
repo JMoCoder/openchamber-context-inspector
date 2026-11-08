@@ -2,6 +2,12 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.1.4] - 2026-11-08
+
+### Changed
+- Align the context window card with the cache card: show limit and remaining on one line, baseline and dynamic tokens on the next. An unknown window shows an em dash for remaining instead of zero.
+- Point panel and status scripts at `main.js` without a query string, so the official package check can see the file.
+
 ## [1.1.3] - 2026-10-29
 
 ### Fixed
