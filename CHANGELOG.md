@@ -2,6 +2,11 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.1.5] - 2026-11-15
+
+### Fixed
+- Resolve OpenCode's data directory by probing `$XDG_DATA_HOME`, `~/.local/share` and `%LOCALAPPDATA%` for an `opencode` folder instead of trusting the platform. On Windows OpenCode stores its database in `~/.local/share/opencode`, so the hard-coded `%LOCALAPPDATA%` path never existed and conversation, tool payloads and DCP stats stayed at zero.
+
 ## [1.1.4] - 2026-11-08
 
 ### Changed
