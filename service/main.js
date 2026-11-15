@@ -17,11 +17,21 @@ if (!port || !token) {
 
 const HOME = os.homedir();
 const XDG_CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
-const XDG_DATA =
-  process.env.XDG_DATA_HOME ||
-  (process.platform === 'win32' && process.env.LOCALAPPDATA
-    ? process.env.LOCALAPPDATA
-    : path.join(HOME, '.local', 'share'));
+// OpenCode stores its data in $XDG_DATA_HOME/opencode or ~/.local/share/opencode
+// on every platform, Windows included; %LOCALAPPDATA% only when neither exists.
+const XDG_DATA = (() => {
+  const candidates = [
+    process.env.XDG_DATA_HOME,
+    path.join(HOME, '.local', 'share'),
+    process.env.LOCALAPPDATA,
+  ].filter(Boolean);
+  for (const dir of candidates) {
+    try {
+      if (fs.existsSync(path.join(dir, 'opencode'))) return dir;
+    } catch {}
+  }
+  return candidates[0] || path.join(HOME, '.local', 'share');
+})();
 
 const AGENTS_MD = path.join(XDG_CONFIG, 'opencode', 'AGENTS.md');
 const DCP_CONFIG = path.join(XDG_CONFIG, 'opencode', 'dcp.jsonc');
