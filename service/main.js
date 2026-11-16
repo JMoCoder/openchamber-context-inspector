@@ -17,11 +17,9 @@ if (!port || !token) {
 
 const HOME = os.homedir();
 const XDG_CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
-const XDG_DATA =
-  process.env.XDG_DATA_HOME ||
-  (process.platform === 'win32' && process.env.LOCALAPPDATA
-    ? process.env.LOCALAPPDATA
-    : path.join(HOME, '.local', 'share'));
+// Match OpenCode 2.3.0 and DCP on every platform, including Windows.
+// Never probe other roots: an empty/missing configured root must not expose stale data.
+const XDG_DATA = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 
 const AGENTS_MD = path.join(XDG_CONFIG, 'opencode', 'AGENTS.md');
 const DCP_CONFIG = path.join(XDG_CONFIG, 'opencode', 'dcp.jsonc');

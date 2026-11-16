@@ -2,6 +2,11 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.1.5] - 2026-11-15
+
+### Fixed
+- Use `$XDG_DATA_HOME` or `~/.local/share` for OpenCode database and DCP storage on every platform, including Windows. Preserve an explicit data root even when missing or empty; never fall back to stale data in another directory or `%LOCALAPPDATA%`.
+
 ## [1.1.4] - 2026-11-08
 
 ### Changed
