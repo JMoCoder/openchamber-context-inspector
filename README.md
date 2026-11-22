@@ -21,9 +21,9 @@ See exactly where your context budget goes in real time: **MCP server schemas & 
   - **Foldable Module Tree (`MODULES`)**: Collapsible rail groups for `Conversation Payloads`, `MCP Servers`, and `System & Baseline`.
 - **Automatic UI Language Switching**:
   - Automatically adapts between **English** and **Chinese (`zh-CN` / `zh-TW`)** based on OpenChamber's active UI locale (`payload.locale`).
-- **1-Second Zero-Overhead Live Refresh**:
+- **Live Refresh**:
   - Powered by Node's built-in `node:sqlite` (`DatabaseSync`) read-only connection and OpenChamber's live `/api/mcp` bridge.
-  - Requires **zero external dependencies** (`node_modules` free) and **zero shell/subprocess permissions**.
+  - Requires **zero external dependencies** (`node_modules` free). The local service can invoke the installed OpenCode CLI for its model catalog.
 
 ---
 
@@ -44,6 +44,12 @@ Works on **Linux, macOS, and Windows** (OpenChamber Desktop & Web `>= 2.0.0`).
 
 ## How It Works
 
+### Context window
+
+On OpenChamber 2.8.0 and newer, the panel's Context Window card and Total Context bar use the host's latest measured window, including the limit of the model that produced that step. An unmeasured window (such as after compaction) stays unmeasured until the next recorded step. A measurement with an unknown limit still shows the token count, without a percentage or remaining capacity.
+
+Older hosts that omit the measurement use the existing local OpenCode database and model-catalog fallback. The six-category breakdown, baseline and dynamic estimates, DCP details, and latest-step cache card keep their existing local sources, so the breakdown and host window need not total the same value.
+
 ### Cache hit rate
 
 The cache card uses the latest assistant record with input usage in the current session, not a session-wide aggregate. It follows OpenChamber's input-token formula:
@@ -58,7 +64,8 @@ cache.read / (input + cache.read + cache.write) × 100%
 | :--- | :--- | :--- |
 | Live MCP Status | OpenCode `/api/mcp` via `host.request` + merged `opencode.json` files | Every `1s` |
 | Session Token Ledger | `~/.local/share/opencode/opencode.db` (`session_v2`, `session_message`) via `node:sqlite` | Every `1s` |
-| Context window | The extension service calls `opencode api get /api/model` and reads `limit.context` for `providerID/modelID`. Cached 10s; refreshed at once if the current model is missing. The panel does not use `host.request` for this: that channel only proxies an extension's declared external API | With each inspect |
+| Host context window | OpenChamber extension bridge `ready.session.context` / `session.context` | When the host publishes a reading |
+| Legacy context window | The extension service calls `opencode api get /api/model` and reads `limit.context` for `providerID/modelID`. Cached 10s; refreshed at once if the current model is missing. The panel does not use `host.request` for this: that channel only proxies an extension's declared external API | With each inspect |
 | DCP Compression State | `~/.config/opencode/dcp.jsonc` + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
 | Skills & Rules | `~/.agents/skills/*/SKILL.md` + `~/.config/opencode/AGENTS.md` + project `AGENTS.md` | Cached `5s` |
 

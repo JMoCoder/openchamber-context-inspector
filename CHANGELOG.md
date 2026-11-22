@@ -2,6 +2,14 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.2.0] - 2026-11-22
+
+### Changed
+- Use OpenChamber 2.8.0's native session context measurement for the Context Window card and Total Context bar. Keep the local fallback for older hosts and preserve detailed breakdown, DCP, and latest-cache figures.
+
+### Fixed
+- Clear the previous reading while a new session loads and prevent delayed inspector responses from restoring it. Keep a host-reported unmeasured window blank after compaction instead of substituting old estimates.
+
 ## [1.1.4] - 2026-11-08
 
 ### Changed
