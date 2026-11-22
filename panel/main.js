@@ -37,6 +37,10 @@
   const pending = new Map();
   let currentSessionId = '';
   let currentDirectory = '';
+  let hostContext; // undefined means an older host omitted the field.
+  let scopeGeneration = 0;
+  let awaitingDirectorySession = false;
+  let lastInspectData = null;
   let isZh = false;
   const openGroups = new Set(['mcp', 'conv', 'static']);
 
@@ -69,7 +73,9 @@
           remaining: '剩余',
           baseline: '基线',
           dynamic: '动态',
-          dynamicTip: '窗口总量减去基线，含用户消息、助手消息和工具载荷。',
+          dynamicTip: '本地构成估算，含用户消息、助手消息和工具载荷。',
+          hostContextTip: 'OpenChamber 报告的最近一个助手步骤的窗口用量。',
+          unmeasured: '未测量',
           cacheRead: '缓存读取',
           cacheRate: '最近一次缓存命中率',
           cacheWrite: '缓存写入',
@@ -108,7 +114,9 @@
           remaining: 'Remaining',
           baseline: 'Baseline',
           dynamic: 'Dynamic',
-          dynamicTip: 'Window total minus the baseline: user messages, assistant messages, and tool payloads.',
+          dynamicTip: 'Local composition estimate: user messages, assistant messages, and tool payloads.',
+          hostContextTip: 'Window usage reported by OpenChamber after the latest assistant step.',
+          unmeasured: 'Unmeasured',
           cacheRead: 'Cache Read',
           cacheRate: 'Latest Cache Hit Rate',
           cacheWrite: 'Cache Write',
@@ -165,6 +173,35 @@
     });
   }
 
+  function readHostContext(session) {
+    if (!session || !Object.hasOwn(session, 'context')) return undefined;
+    const value = session.context;
+    // An explicit null is authoritative after compaction or before measurement.
+    if (!Number.isFinite(value?.tokens) || value.tokens < 0) return null;
+    return {
+      tokens: value.tokens,
+      limit: Number.isFinite(value.limit) && value.limit > 0 ? value.limit : null,
+    };
+  }
+
+  function updateScope(sessionId, directory) {
+    if (sessionId === currentSessionId && directory === currentDirectory) return false;
+    currentSessionId = sessionId;
+    currentDirectory = directory;
+    scopeGeneration++;
+    lastInspectData = null;
+    return true;
+  }
+
+  function updateSession(session, directory = currentDirectory) {
+    const changedScope = updateScope(session?.id || '', directory);
+    const wasAwaitingSession = awaitingDirectorySession;
+    awaitingDirectorySession = false;
+    hostContext = readHostContext(session);
+    renderCurrent();
+    if (changedScope || wasAwaitingSession || hostContext === undefined) void refresh();
+  }
+
   window.addEventListener('message', (event) => {
     if (event.source !== window.parent) return;
     const data = event.data;
@@ -173,18 +210,24 @@
     if (data.type === 'ready') {
       if (data.payload?.theme) applyTheme(data.payload.theme);
       if (data.payload?.locale) detectLang(data.payload.locale);
-      currentSessionId = data.payload?.session?.id || '';
-      currentDirectory = data.payload?.directory || '';
-      void refresh();
+      updateSession(data.payload?.session, data.payload?.directory || '');
       return;
     }
     if (data.type === 'session') {
-      currentSessionId = data.payload?.session?.id || '';
-      void refresh();
+      updateSession(data.payload?.session);
       return;
     }
-    if (data.type === 'session-lifecycle' || data.type === 'directory') {
-      if (data.payload?.directory) currentDirectory = data.payload.directory;
+    if (data.type === 'directory') {
+      if (updateScope(currentSessionId, data.payload?.directory || '')) {
+        // A directory event can arrive independently; wait for its session snapshot
+        // rather than carrying the previous directory's reading into this view.
+        awaitingDirectorySession = true;
+        hostContext = undefined;
+        renderCurrent();
+      }
+      return;
+    }
+    if (data.type === 'session-lifecycle') {
       void refresh();
       return;
     }
@@ -219,19 +262,72 @@
   };
 
   let lastPanelSig = '';
-  let dcpCardOpen = true;
-  function renderData(data, force = false) {
-    const { session, staticInfo, summary, dcp } = data;
+
+  function windowHeadline(summary, i18n) {
+    const fromHost = hostContext !== undefined;
+    const tokens = fromHost ? hostContext?.tokens : summary?.totalTokens;
+    const limit = fromHost ? hostContext?.limit : summary?.contextLimit;
+    const limitKnown = Number.isFinite(limit) && limit > 0;
+    const measured = Number.isFinite(tokens);
+    const usagePercent = measured && limitKnown
+      ? Math.round((tokens / limit) * 1000) / 10
+      : null;
+    return {
+      sourceTitle: fromHost ? i18n.hostContextTip : '',
+      tokensShort: measured ? fmtK(tokens) : '—',
+      tokensLabel: measured ? fmt(tokens) : '—',
+      usageLabel: !measured ? i18n.unmeasured : usagePercent == null ? i18n.unknownWindow : `${usagePercent}%`,
+      limitLabel: limitKnown ? fmt(limit) : i18n.unknownWindow,
+      remainingLabel: measured && limitKnown ? fmt(limit - tokens) : '—',
+      totalBarWidth: usagePercent == null ? 0 : Math.min(100, usagePercent),
+    };
+  }
+
+  function windowCard(summary, i18n, headline) {
+    const { sourceTitle, tokensShort, usageLabel, limitLabel, remainingLabel } = headline;
+    const composition = summary
+      ? `<span class="sub num" title="${i18n.dynamicTip}">${i18n.baseline} ${fmt(summary.staticBaselineTokens || 0)} · ${i18n.dynamic} ${fmt(summary.dynamicTokens || 0)}</span>`
+      : '';
+    return `<div class="card" data-context-window title="${sourceTitle}">
+      <div class="card-top">
+        <span class="label">${i18n.ctxWindow}</span>
+        <span class="sub num">${tokensShort}</span>
+      </div>
+      <span class="big num">${usageLabel}</span>
+      <span class="sub num">${i18n.limit} ${limitLabel} · ${i18n.remaining} ${remainingLabel}</span>
+      ${composition}
+    </div>`;
+  }
+
+  function renderCurrent() {
+    const data = lastInspectData;
     const sig = JSON.stringify({
-      sid: session?.sessionId,
-      title: session?.title,
-      sum: summary,
-      dcp,
-      act: (staticInfo?.activeMcps || []).map((m) => m.id),
-      dis: (staticInfo?.disabledMcps || []).map((m) => m.id),
+      generation: scopeGeneration,
+      locale: isZh,
+      hostContext,
+      sid: data?.session?.sessionId,
+      title: data?.session?.title,
+      sum: data?.summary,
+      dcp: data?.dcp,
+      act: (data?.staticInfo?.activeMcps || []).map((m) => m.id),
+      dis: (data?.staticInfo?.disabledMcps || []).map((m) => m.id),
     });
-    if (!force && sig === lastPanelSig) return;
+    if (sig === lastPanelSig) return;
     lastPanelSig = sig;
+    if (!currentSessionId) {
+      root.innerHTML = '';
+    } else if (data) {
+      renderData(data);
+    } else if (hostContext !== undefined) {
+      const i18n = L();
+      root.innerHTML = windowCard(null, i18n, windowHeadline(null, i18n));
+    } else {
+      root.innerHTML = '';
+    }
+  }
+
+  function renderData(data) {
+    const { session, staticInfo, summary, dcp } = data;
     const total = Math.max(1, summary.totalTokens);
     const i18n = L();
     const byId = Object.fromEntries((data.categories || []).map((c) => [c.id, c]));
@@ -387,11 +483,8 @@
     const minPct = dcp?.minPct ?? 55;
     const maxPct = dcp?.maxPct ?? 75;
     const hardPct = 85;
-    const limitKnown = Number.isFinite(summary.contextLimit) && summary.contextLimit > 0;
-    const usageLabel = limitKnown ? `${summary.usagePercent}%` : i18n.unknownWindow;
-    const limitLabel = limitKnown ? fmt(summary.contextLimit) : i18n.unknownWindow;
-    const remainingLabel = limitKnown ? fmt(summary.contextLimit - (summary.totalTokens || 0)) : '—';
-    const totalBarWidth = limitKnown ? Math.min(100, Math.max(0, summary.usagePercent || 0)) : 0;
+    const headline = windowHeadline(summary, i18n);
+    const { tokensLabel, usageLabel, limitLabel, totalBarWidth } = headline;
     const dcpBlocks = dcp?.blocks || [];
     const dcpRowsHtml = dcpBlocks
       .map(
@@ -414,15 +507,7 @@
 
     root.innerHTML = `
       <div class="grid">
-        <div class="card">
-          <div class="card-top">
-            <span class="label">${i18n.ctxWindow}</span>
-            <span class="sub num">${fmtK(summary.totalTokens)}</span>
-          </div>
-          <span class="big num">${usageLabel}</span>
-          <span class="sub num">${i18n.limit} ${limitLabel} · ${i18n.remaining} ${remainingLabel}</span>
-          <span class="sub num" title="${i18n.dynamicTip}">${i18n.baseline} ${fmt(summary.staticBaselineTokens || 0)} · ${i18n.dynamic} ${fmt(summary.dynamicTokens || 0)}</span>
-        </div>
+        ${windowCard(summary, i18n, headline)}
         <div class="card">
           <div class="card-top">
             <span class="label" title="${i18n.cacheRateTip}">${i18n.cacheRate}</span>
@@ -437,7 +522,7 @@
       <div class="card">
         <div class="card-top">
           <span class="label">${i18n.totalCtx}</span>
-          <span class="sub num">${fmt(summary.totalTokens)} / ${limitLabel}</span>
+          <span class="sub num">${tokensLabel} / ${limitLabel}</span>
         </div>
         <div class="ctx-track">
           <span class="ctx-fill" style="width:${totalBarWidth.toFixed(1)}%"></span>
@@ -508,19 +593,18 @@
     if (btn) btn.addEventListener('click', () => { lastPanelSig = ''; void refresh(); });
   }
 
-  async function inspectSession(liveMcps) {
-    const res = await serviceRequest('/inspect', {
-      sessionId: currentSessionId,
-      directory: currentDirectory,
-      liveMcps,
-    });
+  async function inspectSession(sessionId, directory, liveMcps) {
+    const res = await serviceRequest('/inspect', { sessionId, directory, liveMcps });
     if (!res || res.status !== 200 || !res.body) return null;
     return JSON.parse(res.body);
   }
 
   let inflight = false;
   async function refresh() {
-    if (inflight || document.hidden) return;
+    if (inflight || document.hidden || !currentSessionId || awaitingDirectorySession) return;
+    const generation = scopeGeneration;
+    const sessionId = currentSessionId;
+    const directory = currentDirectory;
     inflight = true;
     try {
       let liveMcps = null;
@@ -532,10 +616,15 @@
         }
       } catch {}
 
-      const data = await inspectSession(liveMcps);
-      if (data) renderData(data);
+      if (generation !== scopeGeneration) return;
+      const data = await inspectSession(sessionId, directory, liveMcps);
+      if (generation !== scopeGeneration || !data) return;
+      if (data.session?.sessionId && data.session.sessionId !== sessionId) return;
+      lastInspectData = data;
+      renderCurrent();
     } catch {} finally {
       inflight = false;
+      if (generation !== scopeGeneration) void refresh();
     }
   }
 
