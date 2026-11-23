@@ -93,7 +93,7 @@ test('v2.8.0 wire ready/session use native headline independently of the local d
   assert.match(panel.html(), /Conversation[\s\S]*30%/); // 180 / local 600, not / host 200
   assert.match(panel.html(), /12\.5%/);
   assert.match(panel.html(), /DCP-fixture/);
-  assert.match(panel.html(), /DCP 57% \/ 77% · OpenCode Auto Compaction 80%/);
+  assert.match(panel.html(), /DCP 57% \/ 77% · OpenCode 80%/);
   assert.match(panel.html(), /class="ctx-tick native" style="left:80%"/);
 
   panel.update(session('alpha', { tokens: 300, limit: 2000 }));
@@ -102,6 +102,22 @@ test('v2.8.0 wire ready/session use native headline independently of the local d
   assert.match(panel.html(), /Limit 2,000 · Remaining 1,700/);
   assert.doesNotMatch(panel.html(), /ctx-tick native/);
   assert.equal(panel.sent.length, 0, 'same-session native updates render without another local poll');
+});
+
+test('Chinese threshold caption shows only OpenCode and the percentage', async () => {
+  const panel = setup();
+  panel.take('hello');
+  panel.emit('ready', { session: session('alpha', { tokens: 200, limit: 628_000 }), directory: '/project', locale: 'zh-CN' });
+  const req = await panel.takeInspect();
+  const data = inspectData('alpha', {
+    contextLimit: 628_000,
+    nativeCompaction: { enabled: true, thresholdTokens: 475_000 },
+  });
+  panel.settle(req, { ...data, dcp: { ...data.dcp, minPct: 40, maxPct: 60 } });
+  await setImmediate();
+
+  assert.match(panel.html(), />DCP 40% \/ 60% · OpenCode 75\.6%<\/span>/);
+  assert.match(panel.html(), /title="OpenCode 自动压缩 75\.6% \(/);
 });
 
 test('explicit null, unknown limit, and zero stay distinct even after a local poll', async () => {
@@ -205,14 +221,14 @@ test('the native line refreshes independently of DCP and disappears when disable
   };
 
   await show({ enabled: true, thresholdTokens: 800 }, true);
-  assert.match(panel.html(), /DCP 55% \/ 75% · OpenCode Auto Compaction 80%/);
+  assert.match(panel.html(), /DCP 55% \/ 75% · OpenCode 80%/);
   assert.match(panel.html(), /left:80%" title="OpenCode Auto Compaction 80% \(800 tokens\)/);
   await show({ enabled: true, thresholdTokens: 700 });
-  assert.match(panel.html(), /DCP 55% \/ 75% · OpenCode Auto Compaction 70%/);
+  assert.match(panel.html(), /DCP 55% \/ 75% · OpenCode 70%/);
   assert.doesNotMatch(panel.html(), /left:80%/);
   for (const [status, label] of [[{ enabled: false }, 'Off'], [null, 'Unknown']]) {
     await show(status);
-    assert.match(panel.html(), new RegExp(`DCP 55% / 75% · OpenCode Auto Compaction ${label}`));
+    assert.match(panel.html(), new RegExp(`DCP 55% / 75% · OpenCode ${label}`));
     assert.doesNotMatch(panel.html(), /ctx-tick native|Hard Limit/);
   }
 });
