@@ -21,19 +21,21 @@ export function indexModelLimits(payload) {
     if (!model || typeof model !== 'object') continue;
     const providerID = String(model.providerID || '').trim();
     const id = String(model.id || model.modelID || '').trim();
-    const context = positiveInt(model.limit && model.limit.context);
-    if (!providerID || !id || context == null) continue;
-    limits[`${providerID}/${id}`] = context;
+    const context = positiveInt(model.limit?.context);
+    const input = positiveInt(model.limit?.input);
+    if (!providerID || !id || (context == null && input == null)) continue;
+    const limit = { context, input };
+    limits[`${providerID}/${id}`] = limit;
     const modelID = String(model.modelID || '').trim();
-    if (modelID && modelID !== id) limits[`${providerID}/${modelID}`] = context;
+    if (modelID && modelID !== id) limits[`${providerID}/${modelID}`] = limit;
   }
   return limits;
 }
 
-export function lookupContextLimit(limits, model) {
+export function lookupModelLimits(limits, model) {
   if (!limits || typeof limits !== 'object' || Array.isArray(limits) || !model) return null;
   const providerID = String(model.providerID || '').trim();
   const id = String(model.id || model.modelID || '').trim();
   if (!providerID || !id) return null;
-  return positiveInt(limits[`${providerID}/${id}`]);
+  return limits[`${providerID}/${id}`] ?? null;
 }

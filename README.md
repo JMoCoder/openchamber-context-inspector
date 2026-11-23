@@ -14,7 +14,7 @@ See exactly where your context budget goes in real time: **MCP server schemas & 
   - Click any row to open the full Context Inspector drawer panel.
 - **Full Inspector Panel**:
   - **Top KPI Cards**: Context window usage percentage (`%` + limit / remaining + baseline / dynamic tokens) and Latest Cache Hit Rate (`%` + cache read / cache write / incremental input / output tokens).
-  - **Total Context & Threshold Bar**: Visualizes current usage against 3 configurable DCP / system watermarks (`55%` soft nudge, `75%` compress trigger, `85%` hard limit).
+  - **Total Context & Threshold Bar**: Visualizes current usage alongside the two DCP nudge thresholds and the model's OpenCode auto-compaction threshold when available.
   - **DCP Compression Details**: Live readout from `@tarquinen/opencode-dcp` storage (`~/.local/share/opencode/storage/plugin/dcp/<sessionId>.json`), showing total compressed tokens, active `@b1@` range blocks (`before → after`), and auto-pruned tool outputs.
   - **Context Breakdown Card**: Individual horizontal meter bars matching the Work Status style.
   - **Disabled MCPs**: Card view of on-demand MCP servers currently disabled (zero token cost).
@@ -50,6 +50,12 @@ On OpenChamber 2.8.0 and newer, the panel's Context Window card and Total Contex
 
 Older hosts that omit the measurement use the existing local OpenCode database and model-catalog fallback. The six-category breakdown, baseline and dynamic estimates, DCP details, and latest-step cache card keep their existing local sources, so the breakdown and host window need not total the same value.
 
+### OpenCode auto-compaction
+
+On OpenCode 2.3 and newer V2 releases, the extension reads the local OpenCode CLI's config layers and model limits for the session's directory. It uses OpenCode's `compaction.buffer` (reserved space), effective input window, and native default reserve. For example, `"20%"` draws a line at 80% when the model's input and chart windows are the same size. A smaller input limit moves it to an earlier point on the chart.
+
+The line is separate from DCP and is not a provider hard limit. It is hidden when `compaction.auto` is off, the local data is unavailable, or the chart and local catalog disagree on the window. Settings available only on a different OpenCode server are not read by the local CLI. `compaction.keep.tokens` does not move the line.
+
 ### Cache hit rate
 
 The cache card uses the latest assistant record with input usage in the current session, not a session-wide aggregate. It follows OpenChamber's input-token formula:
@@ -65,7 +71,8 @@ cache.read / (input + cache.read + cache.write) × 100%
 | Live MCP Status | OpenCode `/api/mcp` via `host.request` + merged `opencode.json` files | Every `1s` |
 | Session Token Ledger | `~/.local/share/opencode/opencode.db` (`session_v2`, `session_message`) via `node:sqlite` | Every `1s` |
 | Host context window | OpenChamber extension bridge `ready.session.context` / `session.context` | When the host publishes a reading |
-| Legacy context window | The extension service calls `opencode api get /api/model` and reads `limit.context` for `providerID/modelID`. Cached 10s; refreshed at once if the current model is missing. The panel does not use `host.request` for this: that channel only proxies an extension's declared external API | With each inspect |
+| Legacy context window | Local OpenCode CLI `/api/model`, using the session's directory and `providerID/modelID` | Cached `10s` |
+| OpenCode auto-compaction | Local OpenCode CLI `/api/config` and `/api/model` scoped to the session's directory, plus the server version from `/api/info` | Cached `10s` while polling |
 | DCP Compression State | `~/.config/opencode/dcp.jsonc` + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
 | Skills & Rules | `~/.agents/skills/*/SKILL.md` + `~/.config/opencode/AGENTS.md` + project `AGENTS.md` | Cached `5s` |
 

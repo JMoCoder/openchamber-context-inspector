@@ -2,6 +2,11 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.2.1] - 2026-11-23
+
+### Fixed
+- Replace the fixed 85% marker with the local OpenCode auto-compaction threshold, including project overrides and model input limits. Leave DCP thresholds unchanged and omit the native tick when disabled or unavailable.
+
 ## [1.2.0] - 2026-11-22
 
 ### Changed
