@@ -50,9 +50,18 @@ On OpenChamber 2.8.0 and newer, the panel's Context Window card and Total Contex
 
 Older hosts that omit the measurement use the existing local OpenCode database and model-catalog fallback. The six-category breakdown, baseline and dynamic estimates, DCP details, and latest-step cache card keep their existing local sources, so the breakdown and host window need not total the same value.
 
+### Reading the threshold bar
+
+The bar uses one scale for both sets of markers: **threshold tokens divided by the total context window**. DCP and OpenCode calculate those token thresholds from different bases:
+
+- **DCP** applies `minContextLimit` and `maxContextLimit` percentages to the model's total context limit (`limit.context`). The panel shows baseline nudge markers; it does not apply per-model overrides or the active-summary buffer that can raise DCP's upper nudge threshold.
+- **OpenCode** subtracts the reserved space (`compaction.buffer` or the native default) from the effective input window: the smaller of `limit.input` and `limit.context` when both are set, or the available limit otherwise. The panel divides the resulting token threshold by the total context limit, not the input limit.
+
+For example, with a **628,000-token** context window and a **500,000-token** input limit, a DCP baseline of `65%` marks **408,200 tokens**. A `15%` OpenCode buffer leaves **425,000 tokens** before auto-compaction: **85% of the input limit**, but **67.7% on the shared bar**.
+
 ### OpenCode auto-compaction
 
-On OpenCode 2.3 and newer V2 releases, the extension reads the local OpenCode CLI's config layers and model limits for the session's directory. It uses OpenCode's `compaction.buffer` (reserved space), effective input window, and native default reserve. For example, `"20%"` draws a line at 80% when the model's input and chart windows are the same size. A smaller input limit moves it to an earlier point on the chart.
+On OpenCode 2.3 and newer V2 releases, the extension reads the local OpenCode CLI's config layers and model limits for the session's directory. `compaction.buffer` can be a percentage or a token count. A percentage represents space kept free, not the used percentage at which compaction starts.
 
 The line is separate from DCP and is not a provider hard limit. It is hidden when `compaction.auto` is off, the local data is unavailable, or the chart and local catalog disagree on the window. Settings available only on a different OpenCode server are not read by the local CLI. `compaction.keep.tokens` does not move the line.
 
