@@ -2,6 +2,11 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.2.2] - 2026-11-23
+
+### Changed
+- Shorten the threshold caption to `OpenCode <percentage>` while keeping the DCP thresholds and the full OpenCode marker tooltip.
+
 ## [1.2.1] - 2026-11-23
 
 ### Fixed

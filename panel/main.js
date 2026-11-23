@@ -543,7 +543,7 @@
         </div>
         <div class="card-top" style="margin-top:2px">
           <span class="sub num">${i18n.used} ${usageLabel}</span>
-          <span class="sub num">DCP ${minPct}% / ${maxPct}% · ${i18n.autoCompaction} ${nativeLabel}</span>
+          <span class="sub num">DCP ${minPct}% / ${maxPct}% · OpenCode ${nativeLabel}</span>
         </div>
       </div>
 
