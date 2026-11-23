@@ -1,7 +1,7 @@
 {
   "name": "openchamber-context-inspector",
-  "version": "1.2.0",
-  "description": "Cursor-style fine-grained context breakdown for OpenChamber sessions: MCP schemas, native tools, skills, AGENTS.md rules, DCP compression thresholds, and conversation payloads",
+  "version": "1.2.1",
+  "description": "Cursor-style context breakdown for OpenChamber sessions, including OpenCode auto-compaction and DCP thresholds",
   "private": false,
   "type": "module",
   "license": "MIT",

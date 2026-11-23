@@ -84,10 +84,10 @@
           output: '输出',
           totalCtx: '总上下文',
           used: '已用',
-          thresholds: '阈值',
           softTip: '提醒阈值',
           midTip: '压缩阈值',
-          hardTip: '强制限额',
+          autoCompaction: 'OpenCode 自动压缩',
+          autoCompactionOff: '已关闭',
           unknownWindow: '未知',
           dcpTitle: '压缩详情',
           breakdownTitle: '上下文构成',
@@ -125,10 +125,10 @@
           output: 'Output',
           totalCtx: 'Total Context',
           used: 'Used',
-          thresholds: 'Thresholds',
           softTip: 'Nudge',
           midTip: 'Compress',
-          hardTip: 'Hard Limit',
+          autoCompaction: 'OpenCode Auto Compaction',
+          autoCompactionOff: 'Off',
           unknownWindow: 'Unknown',
           dcpTitle: 'Compression Details',
           breakdownTitle: 'Context Breakdown',
@@ -277,6 +277,7 @@
       tokensShort: measured ? fmtK(tokens) : '—',
       tokensLabel: measured ? fmt(tokens) : '—',
       usageLabel: !measured ? i18n.unmeasured : usagePercent == null ? i18n.unknownWindow : `${usagePercent}%`,
+      limit: limitKnown ? limit : null,
       limitLabel: limitKnown ? fmt(limit) : i18n.unknownWindow,
       remainingLabel: measured && limitKnown ? fmt(limit - tokens) : '—',
       totalBarWidth: usagePercent == null ? 0 : Math.min(100, usagePercent),
@@ -482,9 +483,19 @@
 
     const minPct = dcp?.minPct ?? 55;
     const maxPct = dcp?.maxPct ?? 75;
-    const hardPct = 85;
     const headline = windowHeadline(summary, i18n);
-    const { tokensLabel, usageLabel, limitLabel, totalBarWidth } = headline;
+    const { tokensLabel, usageLabel, limit, limitLabel, totalBarWidth } = headline;
+    const threshold = summary.nativeCompaction?.thresholdTokens;
+    // The host can still be showing a step from a different model.
+    const nativePct = limit != null && limit === summary.contextLimit
+      && Number.isFinite(threshold) && threshold > 0 && threshold <= limit
+      ? threshold / limit * 100
+      : null;
+    const nativeLabel = nativePct != null
+      ? `${Number(nativePct.toFixed(1))}%`
+      : summary.nativeCompaction?.enabled === false ? i18n.autoCompactionOff : i18n.unknownWindow;
+    const nativeTick = nativePct == null ? '' :
+      `<span class="ctx-tick native" style="left:${nativePct}%" title="${i18n.autoCompaction} ${nativeLabel} (${fmt(threshold)} tokens)"></span>`;
     const dcpBlocks = dcp?.blocks || [];
     const dcpRowsHtml = dcpBlocks
       .map(
@@ -528,11 +539,11 @@
           <span class="ctx-fill" style="width:${totalBarWidth.toFixed(1)}%"></span>
           <span class="ctx-tick" style="left:${minPct}%" title="${i18n.softTip} ${minPct}%"></span>
           <span class="ctx-tick mid" style="left:${maxPct}%" title="${i18n.midTip} ${maxPct}%"></span>
-          <span class="ctx-tick max" style="left:${hardPct}%" title="${i18n.hardTip} ${hardPct}%"></span>
+          ${nativeTick}
         </div>
         <div class="card-top" style="margin-top:2px">
           <span class="sub num">${i18n.used} ${usageLabel}</span>
-          <span class="sub num">${i18n.thresholds} ${minPct}% / ${maxPct}% / ${hardPct}%</span>
+          <span class="sub num">DCP ${minPct}% / ${maxPct}% · ${i18n.autoCompaction} ${nativeLabel}</span>
         </div>
       </div>
 
@@ -594,7 +605,7 @@
   }
 
   async function inspectSession(sessionId, directory, liveMcps) {
-    const res = await serviceRequest('/inspect', { sessionId, directory, liveMcps });
+    const res = await serviceRequest('/inspect', { sessionId, directory, liveMcps, includeCompaction: true });
     if (!res || res.status !== 200 || !res.body) return null;
     return JSON.parse(res.body);
   }

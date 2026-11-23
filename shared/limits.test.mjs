@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { indexModelLimits, lookupContextLimit, positiveInt } from './model-limits.mjs';
+import { indexModelLimits, lookupModelLimits, positiveInt } from './model-limits.mjs';
 
 const catalog = {
   location: { directory: '/tmp' },
@@ -14,7 +14,7 @@ const catalog = {
       providerID: 'dream-gpt',
       id: 'gpt-6.1-sol',
       modelID: 'gpt-6.1-sol',
-      limit: { context: 5_000_000, output: 128_000 },
+      limit: { context: 5_000_000, input: 4_000_000, output: 128_000 },
     },
     {
       providerID: 'dream-grok',
@@ -37,12 +37,14 @@ const catalog = {
 
 const limits = indexModelLimits(catalog);
 
-assert.equal(lookupContextLimit(limits, { providerID: 'xai', id: 'grok-4.7' }), 500_000);
-assert.equal(lookupContextLimit(limits, { providerID: 'dream-gpt', id: 'gpt-6.1-sol' }), 5_000_000);
-assert.equal(lookupContextLimit(limits, { providerID: 'dream-grok', id: 'grok-4.7' }), 200_000);
-assert.equal(lookupContextLimit(limits, { providerID: 'openrouter', id: 'openai/gpt-6.1-sol' }), 1_050_000);
-assert.equal(lookupContextLimit(limits, { providerID: 'dream-gpt', id: 'missing' }), null);
-assert.equal(lookupContextLimit(limits, { id: 'gpt-6.1-sol' }), null);
+assert.deepEqual(lookupModelLimits(limits, { providerID: 'xai', id: 'grok-4.7' }), { context: 500_000, input: null });
+assert.deepEqual(lookupModelLimits(limits, { providerID: 'dream-gpt', id: 'gpt-6.1-sol' }), {
+  context: 5_000_000, input: 4_000_000,
+});
+assert.equal(lookupModelLimits(limits, { providerID: 'dream-grok', id: 'grok-4.7' }).context, 200_000);
+assert.equal(lookupModelLimits(limits, { providerID: 'openrouter', id: 'openai/gpt-6.1-sol' }).context, 1_050_000);
+assert.equal(lookupModelLimits(limits, { providerID: 'dream-gpt', id: 'missing' }), null);
+assert.equal(lookupModelLimits(limits, { id: 'gpt-6.1-sol' }), null);
 assert.equal(positiveInt(0), null);
 assert.equal(positiveInt(-1), null);
 assert.equal(positiveInt('500000'), 500_000);
