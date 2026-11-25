@@ -72,6 +72,100 @@ function inspectData(id, options = {}) {
   };
 }
 
+function mcpCard(html, label) {
+  const start = html.indexOf(`<section class="card" aria-label="${label}">`);
+  assert.ok(start >= 0, `missing ${label} card`);
+  return html.slice(start, html.indexOf('</section>', start));
+}
+
+test('MCP list cards show enabled servers above disabled ones without counting built-in tools', async () => {
+  const panel = setup();
+  panel.take('hello');
+  panel.emit('ready', { session: session('alpha'), directory: '/project', locale: 'zh-CN' });
+  const data = inspectData('alpha');
+  data.staticInfo.activeMcps = [
+    { id: 'context7', name: 'context7', status: 'connected', tokens: 100, tools: 2 },
+    { id: 'opencode-core', name: 'opencode', builtin: true, tokens: 10, tools: 1 },
+  ];
+  data.staticInfo.disabledMcps = [
+    { id: 'needs-auth', status: 'needs_auth' },
+    { id: 'offline<dev>&', status: 'failed' },
+    { id: 'github', status: 'disabled' },
+  ];
+  panel.settle(await panel.takeInspect(), data);
+  await setImmediate();
+
+  const html = panel.html();
+  const enabled = mcpCard(html, '已启用 MCP');
+  const disabled = mcpCard(html, '已停用 MCP');
+  assert.ok(html.indexOf(enabled) < html.indexOf(disabled));
+  assert.match(enabled, /class="sub num">3<\/span>/);
+  assert.match(enabled, />context7<[\s\S]*>needs-auth<[\s\S]*>offline&lt;dev&gt;&amp;</);
+  assert.doesNotMatch(enabled, /github|opencode-core|offline<dev>/);
+  assert.match(disabled, /class="sub num">1<\/span>/);
+  assert.match(disabled, />github</);
+  assert.doesNotMatch(disabled, /needs-auth|offline/);
+  assert.match(html, /MODULES[\s\S]*class="pname">opencode<\/div>/);
+
+  // A status change can move a server between cards without changing the service's arrays or totals.
+  data.staticInfo.disabledMcps[0].status = 'disabled';
+  panel.tick();
+  panel.settle(await panel.takeInspect(), data);
+  await setImmediate();
+  assert.doesNotMatch(mcpCard(panel.html(), '已启用 MCP'), /needs-auth/);
+  assert.match(mcpCard(panel.html(), '已停用 MCP'), /class="sub num">2<\/span>[\s\S]*>needs-auth</);
+});
+
+test('MCP cards keep English empty states and classify config fallback entries', async () => {
+  const panel = setup();
+  panel.take('hello');
+  panel.ready(session('alpha'));
+  const data = inspectData('alpha');
+  panel.settle(await panel.takeInspect(), data);
+  await setImmediate();
+  for (const label of ['Enabled MCPs', 'Disabled MCPs']) {
+    assert.match(mcpCard(panel.html(), label), /class="sub num">0<\/span>[\s\S]*>None</);
+  }
+
+  data.staticInfo.activeMcps = [{ id: 'configured-on', name: 'configured-on', tokens: 100, tools: 1 }];
+  data.staticInfo.disabledMcps = [{ id: 'configured-off' }];
+  panel.tick();
+  panel.settle(await panel.takeInspect(), data);
+  await setImmediate();
+  assert.match(mcpCard(panel.html(), 'Enabled MCPs'), /class="sub num">1<\/span>[\s\S]*>configured-on</);
+  assert.match(mcpCard(panel.html(), 'Disabled MCPs'), /class="sub num">1<\/span>[\s\S]*>configured-off</);
+});
+
+test('MCP cards prefer the host inventory without changing the token modules', async () => {
+  const panel = setup();
+  panel.take('hello');
+  panel.ready(session('alpha'));
+  const data = inspectData('alpha');
+  data.staticInfo.activeMcps = [{ id: 'estimated-tool', name: 'estimated-tool', tokens: 110, tools: 1 }];
+  data.staticInfo.disabledMcps = [{ id: 'fallback-off' }];
+  data.mcpLists = { enabled: ['runtime-only'], disabled: ['runtime-off'] };
+  const request = await panel.takeInspect();
+  assert.equal(JSON.parse(request.payload.body).includeMcpLists, true);
+  panel.settle(request, data);
+  await setImmediate();
+
+  assert.match(mcpCard(panel.html(), 'Enabled MCPs'), /class="sub num">1<\/span>[\s\S]*>runtime-only</);
+  assert.doesNotMatch(mcpCard(panel.html(), 'Enabled MCPs'), /estimated-tool/);
+  assert.match(mcpCard(panel.html(), 'Disabled MCPs'), />runtime-off</);
+  const modules = panel.html().split('MODULES')[1];
+  assert.match(modules, /estimated-tool/);
+  assert.doesNotMatch(modules, /runtime-only/);
+
+  data.mcpLists = { enabled: [], disabled: [] };
+  panel.tick();
+  panel.settle(await panel.takeInspect(), data);
+  await setImmediate();
+  for (const label of ['Enabled MCPs', 'Disabled MCPs']) {
+    assert.match(mcpCard(panel.html(), label), /class="sub num">0<\/span>[\s\S]*>None</);
+  }
+  assert.equal(panel.html().split('MODULES')[1], modules);
+});
+
 test('v2.8.0 wire ready/session use native headline independently of the local detail and cumulative cache metrics', async () => {
   const panel = setup();
   assert.equal(panel.take('hello').type, 'hello');
@@ -80,7 +174,7 @@ test('v2.8.0 wire ready/session use native headline independently of the local d
   panel.emit('directory', { directory: '/project' });
   panel.update({ ...session('alpha', { tokens: 200, limit: 1000 }), tokens: { cacheHitPercent: 99 } });
   const req = await panel.takeInspect();
-  assert.deepEqual(JSON.parse(req.payload.body), { sessionId: 'alpha', directory: '/project', liveMcps: [], includeCompaction: true });
+  assert.deepEqual(JSON.parse(req.payload.body), { sessionId: 'alpha', directory: '/project', liveMcps: [], includeCompaction: true, includeMcpLists: true });
   assert.equal(panel.sent.length, 0, 'duplicate ready/directory/session snapshots do not start duplicate inspections');
   panel.settle(req, inspectData('alpha'));
   await setImmediate();
@@ -200,7 +294,7 @@ test('directory change during MCP lookup starts only the new scope’s inspectio
 
   panel.update(session('beta', { tokens: 800, limit: 1000 }));
   const fresh = await panel.takeInspect();
-  assert.deepEqual(JSON.parse(fresh.payload.body), { sessionId: 'beta', directory: '/new-project', liveMcps: [], includeCompaction: true });
+  assert.deepEqual(JSON.parse(fresh.payload.body), { sessionId: 'beta', directory: '/new-project', liveMcps: [], includeCompaction: true, includeMcpLists: true });
   panel.settle(fresh, inspectData('alpha'));
   await setImmediate();
   assert.match(panel.html(), /80%/);

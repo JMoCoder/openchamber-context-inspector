@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { cacheHitRate } from '../shared/cache-usage.mjs';
 import { autoCompaction } from '../shared/compaction.mjs';
-import { createOpenCodeReader } from './opencode.mjs';
+import { createDesktopOpenCodeApi, createOpenCodeReader } from './opencode.mjs';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT || process.env.OPENCHAMBER_AGENT_PORT);
 const token = process.env.OPENCHAMBER_SERVICE_TOKEN || process.env.OPENCHAMBER_AGENT_TOKEN || '';
@@ -411,6 +411,11 @@ const openCode = createOpenCodeReader((route) =>
   }),
 );
 
+// The Desktop inventory reflects the same OpenCode server as the host UI.
+const desktopMcps = process.versions.electron
+  ? createOpenCodeReader(createDesktopOpenCodeApi(process.env.OPENCHAMBER_SERVICE_DATA_DIR))
+  : null;
+
 const sendJson = (res, status, data) => {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -446,6 +451,7 @@ const server = http.createServer(async (req, res) => {
     let directory = url.searchParams.get('directory') || '';
     let liveMcps = null;
     let includeCompaction = false;
+    let includeMcpLists = false;
 
     if (req.method === 'POST') {
       try {
@@ -456,6 +462,7 @@ const server = http.createServer(async (req, res) => {
           if (parsed.directory) directory = parsed.directory;
           if (Array.isArray(parsed.liveMcps)) liveMcps = parsed.liveMcps;
           includeCompaction = parsed.includeCompaction === true;
+          includeMcpLists = parsed.includeMcpLists === true;
         }
       } catch {}
     }
@@ -537,9 +544,11 @@ const server = http.createServer(async (req, res) => {
     const sessionDir = typeof sessionData?.directory === 'string' && path.isAbsolute(sessionData.directory)
       ? path.normalize(sessionData.directory)
       : '';
-    const [catalog, compactionSettings] = await Promise.all([
+    // The inventory is only for the cards. Keep the token estimates on staticInfo.
+    const [catalog, compactionSettings, mcpLists] = await Promise.all([
       openCode.modelLimits(sessionDir, sessionData?.model),
       includeCompaction && sessionId === sessionData?.sessionId && openCode.compactionSettings(sessionDir),
+      includeMcpLists && desktopMcps && sessionId === sessionData?.sessionId ? desktopMcps.mcpLists(sessionDir) : null,
     ]);
     const contextLimit = catalog.limits?.context ?? null;
     const nativeCompaction = catalog.scopeMatches ? autoCompaction(compactionSettings, catalog.limits) : null;
@@ -552,6 +561,7 @@ const server = http.createServer(async (req, res) => {
       at: Date.now(),
       session: sessionData,
       staticInfo,
+      mcpLists,
       dcp,
       summary: {
         totalTokens: displayTotal,
