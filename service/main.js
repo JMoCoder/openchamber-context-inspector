@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { readDcpThresholds } from './dcp-thresholds.mjs';
 import { readSessionPayloads } from './session-payloads.mjs';
 import { cacheHitRate } from '../shared/cache-usage.mjs';
 import { autoCompaction } from '../shared/compaction.mjs';
@@ -26,22 +27,12 @@ const XDG_DATA =
     : path.join(HOME, '.local', 'share'));
 
 const AGENTS_MD = path.join(XDG_CONFIG, 'opencode', 'AGENTS.md');
-const DCP_CONFIG = path.join(XDG_CONFIG, 'opencode', 'dcp.jsonc');
+const DCP_CONFIG_DIR = path.join(XDG_CONFIG, 'opencode');
 const DCP_STORAGE_DIR = path.join(XDG_DATA, 'opencode', 'storage', 'plugin', 'dcp');
 const OPENCODE_DB = path.join(XDG_DATA, 'opencode', 'opencode.db');
 
 function inspectDcp(sessionId) {
-  let minPct = 55;
-  let maxPct = 75;
-  try {
-    if (fs.existsSync(DCP_CONFIG)) {
-      const raw = fs.readFileSync(DCP_CONFIG, 'utf8');
-      const mMin = raw.match(/"minContextLimit"\s*:\s*"(\d+(?:\.\d+)?)%"/);
-      const mMax = raw.match(/"maxContextLimit"\s*:\s*"(\d+(?:\.\d+)?)%"/);
-      if (mMin) minPct = Number(mMin[1]);
-      if (mMax) maxPct = Number(mMax[1]);
-    }
-  } catch {}
+  const thresholds = readDcpThresholds(DCP_CONFIG_DIR);
 
   const blocks = [];
   let prunedToolCount = 0;
@@ -86,8 +77,7 @@ function inspectDcp(sessionId) {
   } catch {}
 
   return {
-    minPct,
-    maxPct,
+    ...thresholds,
     totalSavedTokens,
     prunedToolCount,
     prunedToolTokens,
@@ -334,7 +324,7 @@ function opencodeBinary() {
   return 'opencode';
 }
 
-const openCode = createOpenCodeReader((route) =>
+const readCliApi = (route) =>
   new Promise((resolve) => {
     execFile(
       opencodeBinary(),
@@ -349,13 +339,15 @@ const openCode = createOpenCodeReader((route) =>
         resolve(null);
       },
     );
-  }),
-);
+  });
 
-// The Desktop inventory reflects the same OpenCode server as the host UI.
-const desktopMcps = process.versions.electron
-  ? createOpenCodeReader(createDesktopOpenCodeApi(process.env.OPENCHAMBER_SERVICE_DATA_DIR))
-  : null;
+// On Desktop the API already proxies the host-selected OpenCode server. CLI
+// discovery would instead use (or start) the separate managed CLI service.
+const isDesktopHost = Boolean(process.versions.electron);
+const readOpenCodeApi = isDesktopHost
+  ? createDesktopOpenCodeApi(process.env.OPENCHAMBER_SERVICE_DATA_DIR)
+  : readCliApi;
+const openCode = createOpenCodeReader(readOpenCodeApi);
 
 const sendJson = (res, status, data) => {
   res.writeHead(status, {
@@ -489,7 +481,7 @@ const server = http.createServer(async (req, res) => {
     const [catalog, compactionSettings, mcpLists] = await Promise.all([
       openCode.modelLimits(sessionDir, sessionData?.model),
       includeCompaction && sessionId === sessionData?.sessionId && openCode.compactionSettings(sessionDir),
-      includeMcpLists && desktopMcps && sessionId === sessionData?.sessionId ? desktopMcps.mcpLists(sessionDir) : null,
+      includeMcpLists && isDesktopHost && sessionId === sessionData?.sessionId ? openCode.mcpLists(sessionDir) : null,
     ]);
     const contextLimit = catalog.limits?.context ?? null;
     const nativeCompaction = catalog.scopeMatches ? autoCompaction(compactionSettings, catalog.limits) : null;

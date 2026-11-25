@@ -121,7 +121,7 @@
           mcp: 'MCP 工具',
           native: '原生工具',
           skills: 'Skills 清单',
-          sys_rules: '系统与规约',
+          sys_rules: '系统规约',
           tools_io: '工具载荷',
           conversation: '对话消息',
           reading: '正在读取上下文构成…',

@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { autoCompaction } from '../shared/compaction.mjs';
 import { createDesktopOpenCodeApi, createOpenCodeReader } from './opencode.mjs';
 
 const a = path.resolve('workspace & one');
@@ -68,6 +69,31 @@ async function desktopData(t, settings) {
   return path.join(root, 'guest-data', 'context-inspector');
 }
 
+test('Desktop reads the current host and session scope to calculate the native threshold', async (t) => {
+  const serviceData = await desktopData(t, { desktopLocalPort: 50123 });
+  const calls = [];
+  const api = createDesktopOpenCodeApi(serviceData, async (route, options) => {
+    const url = new URL(route);
+    calls.push([url.pathname, url.searchParams.get('location[directory]')]);
+    assert.equal(url.origin, 'http://127.0.0.1:50123');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.redirect, 'error');
+    assert.equal(new Headers(options.headers).has('Authorization'), false);
+    if (url.pathname === '/api/info') return Response.json({ version: '2.3.2' });
+    if (url.pathname === '/api/config') return Response.json([
+      doc({ auto: true, buffer: '15%' }),
+      { type: 'directory' },
+      doc({ buffer: '5%' }),
+    ]);
+    return Response.json(catalog(a, 80_000));
+  });
+  const reader = createOpenCodeReader(api);
+  const [settings, scoped] = await Promise.all([reader.compactionSettings(a), reader.modelLimits(a, model)]);
+  assert.equal(scoped.scopeMatches, true);
+  assert.deepEqual(autoCompaction(settings, scoped.limits), { enabled: true, thresholdTokens: 76_000 });
+  assert.deepEqual(calls.sort(), [['/api/config', a], ['/api/info', null], ['/api/model', a]]);
+});
+
 test('Desktop MCP lists are scoped, cached, and separate from connectivity', async (t) => {
   const serviceData = await desktopData(t, { desktopLocalPort: 50123 });
   const calls = [];
@@ -104,4 +130,22 @@ test('Desktop MCP lists are scoped, cached, and separate from connectivity', asy
   now = 30_000;
   assert.equal(await reader.mcpLists(a), null);
   assert.deepEqual(calls, [a, b, a, a, a]);
+});
+
+test('Desktop keeps the threshold unknown when its own API cannot answer', async (t) => {
+  const invalid = await desktopData(t, { desktopLocalPort: 'https://example.test' });
+  let called = false;
+  const noDesktopApi = createDesktopOpenCodeApi(invalid, async () => { called = true; });
+  assert.equal(await createOpenCodeReader(noDesktopApi).compactionSettings(a), null);
+  assert.equal(called, false);
+
+  const serviceData = await desktopData(t, { desktopLocalPort: 50123 });
+  for (const response of [
+    Response.redirect('http://127.0.0.1:50125/'),
+    new Response(null, { status: 401 }),
+    new Response('not JSON'),
+  ]) {
+    const reader = createOpenCodeReader(createDesktopOpenCodeApi(serviceData, async () => response));
+    assert.equal(await reader.compactionSettings(a), null);
+  }
 });

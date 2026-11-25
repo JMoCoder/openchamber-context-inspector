@@ -23,7 +23,7 @@ See exactly where your context budget goes in real time: **MCP server schemas & 
   - Automatically adapts between **English** and **Chinese (`zh-CN` / `zh-TW`)** based on OpenChamber's active UI locale (`payload.locale`).
 - **Live Refresh**:
   - Reads token usage through Node's built-in `node:sqlite` (`DatabaseSync`) read-only connection.
-  - Requires **zero external dependencies** (`node_modules` free). The local service can invoke the installed OpenCode CLI for its model catalog.
+  - Requires **zero external dependencies** (`node_modules` free). The service uses OpenChamber's local API on Desktop, or the installed OpenCode CLI on a standalone Web host.
 
 ---
 
@@ -50,20 +50,22 @@ On OpenChamber 2.8.0 and newer, the panel's Context Window card and Total Contex
 
 Older hosts that omit the measurement use the existing local OpenCode database and model-catalog fallback. The six-category breakdown, baseline and dynamic estimates, DCP details, and latest-step cache card keep their existing local sources, so the breakdown and host window need not total the same value.
 
+The **Conversation** estimate combines user text with saved assistant text and reasoning. It is not a separate measurement of model output. The cache card's **Output** is the recorded `tokens.output` for the latest assistant record with input usage.
+
 ### Reading the threshold bar
 
 The bar uses one scale for both sets of markers: **threshold tokens divided by the total context window**. DCP and OpenCode calculate those token thresholds from different bases:
 
-- **DCP** applies `minContextLimit` and `maxContextLimit` percentages to the model's total context limit (`limit.context`). The panel shows baseline nudge markers; it does not apply per-model overrides or the active-summary buffer that can raise DCP's upper nudge threshold.
+- **DCP** shows the explicit global `compress.minContextLimit` and `compress.maxContextLimit` from `dcp.jsonc` (or `dcp.json` if absent). A token limit is converted to a percentage of the window shown on the bar. An unreadable or unplottable value is shown as `—` with no marker. The panel does not check plugin load state, assume defaults, or apply model overrides or the active-summary buffer.
 - **OpenCode** subtracts the reserved space (`compaction.buffer` or the native default) from the effective input window: the smaller of `limit.input` and `limit.context` when both are set, or the available limit otherwise. The panel divides the resulting token threshold by the total context limit, not the input limit.
 
 For example, with a **628,000-token** context window and a **500,000-token** input limit, a DCP baseline of `65%` marks **408,200 tokens**. A `15%` OpenCode buffer leaves **425,000 tokens** before auto-compaction: **85% of the input limit**, but **67.7% on the shared bar**.
 
 ### OpenCode auto-compaction
 
-On OpenCode 2.3 and newer V2 releases, the extension reads the local OpenCode CLI's config layers and model limits for the session's directory. `compaction.buffer` can be a percentage or a token count. A percentage represents space kept free, not the used percentage at which compaction starts.
+On OpenCode 2.3 and newer V2 releases, the extension reads config layers and model limits for the session's directory. On Desktop it uses the host-selected OpenCode server through OpenChamber's loopback API at the port recorded in the host's `settings.json` (`desktopLocalPort`). It does not start or fall back to a separate CLI service. On a standalone Web host it uses the local OpenCode CLI; this does not necessarily reflect settings on a different server. `compaction.buffer` can be a percentage or a token count. A percentage represents space kept free, not the used percentage at which compaction starts.
 
-The line is separate from DCP and is not a provider hard limit. It is hidden when `compaction.auto` is off, the local data is unavailable, or the chart and local catalog disagree on the window. Settings available only on a different OpenCode server are not read by the local CLI. `compaction.keep.tokens` does not move the line.
+The line is separate from DCP and is not a provider hard limit. It is hidden when `compaction.auto` is off, the API data is unavailable, or the chart and catalog disagree on the window. `compaction.keep.tokens` does not move the line.
 
 ### Conversation payload estimates
 
@@ -88,9 +90,9 @@ cache.read / (input + cache.read + cache.write) × 100%
 | Session Token Ledger | `~/.local/share/opencode/opencode.db` (`session_v2`, `session_message`) via `node:sqlite` | Every `1s` |
 | Host context window | OpenChamber extension bridge `ready.session.context` / `session.context` | When the host publishes a reading |
 | Conversation payloads | OpenCode `session_part` with `session_message` inline content fallback, via `node:sqlite` | Every `1s` |
-| Legacy context window | Local OpenCode CLI `/api/model`, using the session's directory and `providerID/modelID` | Cached `10s` |
-| OpenCode auto-compaction | Local OpenCode CLI `/api/config` and `/api/model` scoped to the session's directory, plus the server version from `/api/info` | Cached `10s` while polling |
-| DCP Compression State | `~/.config/opencode/dcp.jsonc` + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
+| Legacy context window | OpenCode `/api/model` via the Desktop host or local CLI, using the session's directory and `providerID/modelID` | Cached `10s` |
+| OpenCode auto-compaction | OpenCode `/api/config` and `/api/model` via the Desktop host or local CLI, scoped to the session's directory, plus the server version from `/api/info` | Cached `10s` while polling |
+| DCP Compression State | `~/.config/opencode/dcp.jsonc` (or `dcp.json`) + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
 | Skills & Rules | `~/.agents/skills/*/SKILL.md` + `~/.config/opencode/AGENTS.md` + project `AGENTS.md` | Cached `5s` |
 
 ---

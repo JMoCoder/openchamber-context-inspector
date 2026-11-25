@@ -57,7 +57,7 @@
           mcp: 'MCP 工具',
           native: '原生工具',
           skills: 'Skills 清单',
-          sys_rules: '系统与规约',
+          sys_rules: '系统规约',
           conversation: '对话消息',
           assistantMsgs: '助手消息',
           userMsgs: '用户消息',
@@ -268,6 +268,14 @@
   };
 
   let lastPanelSig = '';
+
+  function dcpThresholdPct(percent, tokens, limit) {
+    if (Number.isFinite(percent) && percent >= 0 && percent <= 100) return percent;
+    if (limit != null && Number.isFinite(tokens) && tokens >= 0 && tokens <= limit) {
+      return tokens / limit * 100;
+    }
+    return null;
+  }
 
   function windowHeadline(summary, i18n) {
     const fromHost = hostContext !== undefined;
@@ -507,10 +515,19 @@
       })
       .join('');
 
-    const minPct = dcp?.minPct ?? 55;
-    const maxPct = dcp?.maxPct ?? 75;
     const headline = windowHeadline(summary, i18n);
     const { tokensLabel, usageLabel, limit, limitLabel, totalBarWidth } = headline;
+    const dcpThresholds = [
+      { pct: dcpThresholdPct(dcp?.minPct, dcp?.minTokens, limit), className: 'ctx-tick', title: i18n.softTip },
+      { pct: dcpThresholdPct(dcp?.maxPct, dcp?.maxTokens, limit), className: 'ctx-tick mid', title: i18n.midTip },
+    ].map((threshold) => ({
+      ...threshold,
+      label: threshold.pct == null ? '—' : `${Number(threshold.pct.toFixed(2))}%`,
+    }));
+    const dcpLabel = dcpThresholds.map(({ label }) => label).join(' / ');
+    const dcpTicks = dcpThresholds.map(({ pct, className, title, label }) => pct == null ? '' :
+      `<span class="${className}" style="left:${pct}%" title="${title} ${label}"></span>`
+    ).join('');
     const threshold = summary.nativeCompaction?.thresholdTokens;
     // The host can still be showing a step from a different model.
     const nativePct = limit != null && limit === summary.contextLimit
@@ -563,13 +580,12 @@
         </div>
         <div class="ctx-track">
           <span class="ctx-fill" style="width:${totalBarWidth.toFixed(1)}%"></span>
-          <span class="ctx-tick" style="left:${minPct}%" title="${i18n.softTip} ${minPct}%"></span>
-          <span class="ctx-tick mid" style="left:${maxPct}%" title="${i18n.midTip} ${maxPct}%"></span>
+          ${dcpTicks}
           ${nativeTick}
         </div>
         <div class="card-top" style="margin-top:2px">
           <span class="sub num">${i18n.used} ${usageLabel}</span>
-          <span class="sub num">DCP ${minPct}% / ${maxPct}% · OpenCode ${nativeLabel}</span>
+          <span class="sub num">DCP ${dcpLabel} · OpenCode ${nativeLabel}</span>
         </div>
       </div>
 

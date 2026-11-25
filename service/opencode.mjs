@@ -5,7 +5,7 @@ import { readCompactionSettings, supportsCompactionBuffer } from '../shared/comp
 
 const TTL_MS = 10_000;
 const MAX_CACHED_SCOPES = 24;
-const DESKTOP_READS = new Set(['/api/mcp']);
+const DESKTOP_READS = new Set(['/api/info', '/api/model', '/api/config', '/api/mcp']);
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 export function createDesktopOpenCodeApi(serviceDataDir, fetchApi = fetch) {
