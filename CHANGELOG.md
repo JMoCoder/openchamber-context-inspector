@@ -2,6 +2,15 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.3.0] - 2026-11-25
+
+### Changed
+- Show an em dash and no marker for a DCP threshold that cannot be read from `dcp.jsonc` or `dcp.json`, instead of assuming 55% / 75%. Token limits are converted to a percentage of the displayed window.
+- Shorten the Chinese system rules label to **系统规约**.
+
+### Fixed
+- On OpenChamber Desktop, read OpenCode's auto-compaction settings and model limits from the server the host is using, so the threshold is no longer unknown when CLI discovery reaches a different server or none.
+
 ## [1.2.3] - 2026-11-25
 
 ### Added
