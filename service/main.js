@@ -334,7 +334,7 @@ function opencodeBinary() {
   return 'opencode';
 }
 
-const openCode = createOpenCodeReader((route) =>
+const readCliApi = (route) =>
   new Promise((resolve) => {
     execFile(
       opencodeBinary(),
@@ -349,13 +349,15 @@ const openCode = createOpenCodeReader((route) =>
         resolve(null);
       },
     );
-  }),
-);
+  });
 
-// The Desktop inventory reflects the same OpenCode server as the host UI.
-const desktopMcps = process.versions.electron
-  ? createOpenCodeReader(createDesktopOpenCodeApi(process.env.OPENCHAMBER_SERVICE_DATA_DIR))
-  : null;
+// On Desktop the API already proxies the host-selected OpenCode server. CLI
+// discovery would instead use (or start) the separate managed CLI service.
+const isDesktopHost = Boolean(process.versions.electron);
+const readOpenCodeApi = isDesktopHost
+  ? createDesktopOpenCodeApi(process.env.OPENCHAMBER_SERVICE_DATA_DIR)
+  : readCliApi;
+const openCode = createOpenCodeReader(readOpenCodeApi);
 
 const sendJson = (res, status, data) => {
   res.writeHead(status, {
@@ -489,7 +491,7 @@ const server = http.createServer(async (req, res) => {
     const [catalog, compactionSettings, mcpLists] = await Promise.all([
       openCode.modelLimits(sessionDir, sessionData?.model),
       includeCompaction && sessionId === sessionData?.sessionId && openCode.compactionSettings(sessionDir),
-      includeMcpLists && desktopMcps && sessionId === sessionData?.sessionId ? desktopMcps.mcpLists(sessionDir) : null,
+      includeMcpLists && isDesktopHost && sessionId === sessionData?.sessionId ? openCode.mcpLists(sessionDir) : null,
     ]);
     const contextLimit = catalog.limits?.context ?? null;
     const nativeCompaction = catalog.scopeMatches ? autoCompaction(compactionSettings, catalog.limits) : null;
