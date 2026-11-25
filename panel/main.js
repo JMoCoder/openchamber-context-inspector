@@ -57,7 +57,7 @@
           mcp: 'MCP 工具',
           native: '原生工具',
           skills: 'Skills 清单',
-          sys_rules: '系统与规约',
+          sys_rules: '系统规约',
           conversation: '对话消息',
           assistantMsgs: '助手消息',
           userMsgs: '用户消息',
