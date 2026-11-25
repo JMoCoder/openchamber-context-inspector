@@ -99,10 +99,12 @@
     .port {
       display: inline-flex;
       align-items: center;
-      height: 20px;
-      padding: 0 7px;
+      min-height: 20px;
+      max-width: 100%;
+      padding: 2px 7px;
       border-radius: 4px;
       font: 11px var(--oc-mono);
+      overflow-wrap: anywhere;
       background: color-mix(in srgb, var(--oc-fg) 6%, transparent);
       color: var(--oc-muted);
     }

@@ -2,6 +2,14 @@
 
 All notable changes to `openchamber-context-inspector` will be documented in this file.
 
+## [1.2.3] - 2026-11-25
+
+### Added
+- Show an **Enabled MCPs** card above **Disabled MCPs**, with server names and counts. Enabled servers may be disconnected or awaiting authentication.
+
+### Fixed
+- Restore tool call counts and assistant and tool payload estimates when OpenCode V2 stores message parts separately. Keep support for older inline messages.
+
 ## [1.2.2] - 2026-11-23
 
 ### Changed

@@ -17,12 +17,12 @@ See exactly where your context budget goes in real time: **MCP server schemas & 
   - **Total Context & Threshold Bar**: Visualizes current usage alongside the two DCP nudge thresholds and the model's OpenCode auto-compaction threshold when available.
   - **DCP Compression Details**: Live readout from `@tarquinen/opencode-dcp` storage (`~/.local/share/opencode/storage/plugin/dcp/<sessionId>.json`), showing total compressed tokens, active `@b1@` range blocks (`before → after`), and auto-pruned tool outputs.
   - **Context Breakdown Card**: Individual horizontal meter bars matching the Work Status style.
-  - **Disabled MCPs**: Card view of on-demand MCP servers currently disabled (zero token cost).
+  - **Enabled and Disabled MCPs**: Separate cards show each group's server names and count. On Desktop they prefer the host's MCP list for the session directory and fall back to the existing config-based inventory when unavailable. An enabled server may still be disconnected; these lists do not change token accounting.
   - **Foldable Module Tree (`MODULES`)**: Collapsible rail groups for `Conversation Payloads`, `MCP Servers`, and `System & Baseline`.
 - **Automatic UI Language Switching**:
   - Automatically adapts between **English** and **Chinese (`zh-CN` / `zh-TW`)** based on OpenChamber's active UI locale (`payload.locale`).
 - **Live Refresh**:
-  - Powered by Node's built-in `node:sqlite` (`DatabaseSync`) read-only connection and OpenChamber's live `/api/mcp` bridge.
+  - Reads token usage through Node's built-in `node:sqlite` (`DatabaseSync`) read-only connection.
   - Requires **zero external dependencies** (`node_modules` free). The local service can invoke the installed OpenCode CLI for its model catalog.
 
 ---
@@ -83,7 +83,8 @@ cache.read / (input + cache.read + cache.write) × 100%
 
 | Data Source | Path / Endpoint | Refresh Rate |
 | :--- | :--- | :--- |
-| Live MCP Status | OpenCode `/api/mcp` via `host.request` + merged `opencode.json` files | Every `1s` |
+| MCP list cards | Desktop host `/api/mcp` scoped to the session directory, with the existing inventory as fallback | Cached `10s` while polling |
+| MCP token estimates | Existing bridge data when available, otherwise merged `opencode.json` files | Every `1s` |
 | Session Token Ledger | `~/.local/share/opencode/opencode.db` (`session_v2`, `session_message`) via `node:sqlite` | Every `1s` |
 | Host context window | OpenChamber extension bridge `ready.session.context` / `session.context` | When the host publishes a reading |
 | Conversation payloads | OpenCode `session_part` with `session_message` inline content fallback, via `node:sqlite` | Every `1s` |

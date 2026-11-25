@@ -91,7 +91,9 @@
           unknownWindow: '未知',
           dcpTitle: '压缩详情',
           breakdownTitle: '上下文构成',
+          enabledMcp: '已启用 MCP',
           disabledMcp: '已停用 MCP',
+          noMcp: '暂无',
         }
       : {
           tools_io: 'Tool Payloads',
@@ -132,7 +134,9 @@
           unknownWindow: 'Unknown',
           dcpTitle: 'Compression Details',
           breakdownTitle: 'Context Breakdown',
+          enabledMcp: 'Enabled MCPs',
           disabledMcp: 'Disabled MCPs',
+          noMcp: 'None',
         };
 
   function sendToHost(msg) {
@@ -251,6 +255,8 @@
     if (v < 0.1) return '<0.1%';
     return v < 10 ? `${v.toFixed(1)}%` : `${Math.round(v)}%`;
   };
+  const escapeText = (text) => String(text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  const isDisabledMcp = (mcp) => !mcp.status || mcp.status === 'disabled';
 
   const TONE_COLORS = {
     mcp: 'var(--oc-info)',
@@ -300,8 +306,31 @@
     </div>`;
   }
 
+  function mcpListsFor(data) {
+    if (data.mcpLists) return data.mcpLists;
+    const active = data.staticInfo.activeMcps || [];
+    const inactive = data.staticInfo.disabledMcps || [];
+    const enabled = active.filter((m) => !m.builtin).map((m) => m.id);
+    const disabled = [];
+    // The token estimates group all non-connected servers in disabledMcps.
+    for (const m of inactive) (isDisabledMcp(m) ? disabled : enabled).push(m.id);
+    return { enabled, disabled };
+  }
+
+  function mcpListCard(label, names, emptyLabel) {
+    const pills = names.map((name) => `<span class="port">${escapeText(name)}</span>`).join('');
+    return `<section class="card" aria-label="${label}">
+      <div class="card-top">
+        <span class="label">${label}</span>
+        <span class="sub num">${names.length}</span>
+      </div>
+      <div class="ports">${pills || `<span class="sub">${emptyLabel}</span>`}</div>
+    </section>`;
+  }
+
   function renderCurrent() {
     const data = lastInspectData;
+    const mcpLists = data && mcpListsFor(data);
     const sig = JSON.stringify({
       generation: scopeGeneration,
       locale: isZh,
@@ -311,14 +340,14 @@
       sum: data?.summary,
       dcp: data?.dcp,
       act: (data?.staticInfo?.activeMcps || []).map((m) => m.id),
-      dis: (data?.staticInfo?.disabledMcps || []).map((m) => m.id),
+      mcpLists,
     });
     if (sig === lastPanelSig) return;
     lastPanelSig = sig;
     if (!currentSessionId) {
       root.innerHTML = '';
     } else if (data) {
-      renderData(data);
+      renderData(data, mcpLists);
     } else if (hostContext !== undefined) {
       const i18n = L();
       root.innerHTML = windowCard(null, i18n, windowHeadline(null, i18n));
@@ -327,10 +356,11 @@
     }
   }
 
-  function renderData(data) {
+  function renderData(data, mcpLists) {
     const { session, staticInfo, summary, dcp } = data;
     const total = Math.max(1, summary.totalTokens);
     const i18n = L();
+    const activeMcps = staticInfo.activeMcps || [];
     const byId = Object.fromEntries((data.categories || []).map((c) => [c.id, c]));
     const unifiedCategories = [
       { id: 'tools_io', label: i18n.tools_io, tokens: byId.tools_io?.tokens ?? summary.toolTokens ?? 0 },
@@ -368,13 +398,13 @@
       })
       .join('');
 
-    const mcpRowsHtml = (staticInfo.activeMcps || [])
+    const mcpRowsHtml = activeMcps
       .map((m) => {
         const pct = (m.tokens / total) * 100;
         return `
           <div class="row">
             <div>
-              <div class="pname">${m.name}</div>
+              <div class="pname">${escapeText(m.name)}</div>
               <div class="pdetail">${m.tools} tools</div>
             </div>
             <span class="cell num muted">${fmtPct(pct)}</span>
@@ -441,7 +471,7 @@
       {
         id: 'mcp',
         title: i18n.grpMcp,
-        count: staticInfo.activeMcps.length,
+        count: activeMcps.length,
         color: 'var(--oc-info)',
         tokens: staticInfo.mcpTotalTokens,
         body: mcpRowsHtml,
@@ -475,10 +505,6 @@
           </div>
         `;
       })
-      .join('');
-
-    const disabledPills = (staticInfo.disabledMcps || [])
-      .map((m) => `<span class="port">${m.id}</span>`)
       .join('');
 
     const minPct = dcp?.minPct ?? 55;
@@ -567,13 +593,8 @@
         <div class="meter-list">${meterListHtml}</div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <span class="label">${i18n.disabledMcp}</span>
-          <span class="sub num">${staticInfo.disabledMcps.length}</span>
-        </div>
-        <div class="ports">${disabledPills || '<span class="sub">None</span>'}</div>
-      </div>
+      ${mcpListCard(i18n.enabledMcp, mcpLists.enabled, i18n.noMcp)}
+      ${mcpListCard(i18n.disabledMcp, mcpLists.disabled, i18n.noMcp)}
 
       <section class="section">
         <div class="cols">
@@ -605,7 +626,9 @@
   }
 
   async function inspectSession(sessionId, directory, liveMcps) {
-    const res = await serviceRequest('/inspect', { sessionId, directory, liveMcps, includeCompaction: true });
+    const res = await serviceRequest('/inspect', {
+      sessionId, directory, liveMcps, includeCompaction: true, includeMcpLists: true,
+    });
     if (!res || res.status !== 200 || !res.body) return null;
     return JSON.parse(res.body);
   }
