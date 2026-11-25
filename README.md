@@ -50,11 +50,13 @@ On OpenChamber 2.8.0 and newer, the panel's Context Window card and Total Contex
 
 Older hosts that omit the measurement use the existing local OpenCode database and model-catalog fallback. The six-category breakdown, baseline and dynamic estimates, DCP details, and latest-step cache card keep their existing local sources, so the breakdown and host window need not total the same value.
 
+The **Conversation** estimate combines user text with saved assistant text and reasoning. It is not a separate measurement of model output. The cache card's **Output** is the recorded `tokens.output` for the latest assistant record with input usage.
+
 ### Reading the threshold bar
 
 The bar uses one scale for both sets of markers: **threshold tokens divided by the total context window**. DCP and OpenCode calculate those token thresholds from different bases:
 
-- **DCP** applies `minContextLimit` and `maxContextLimit` percentages to the model's total context limit (`limit.context`). The panel shows baseline nudge markers; it does not apply per-model overrides or the active-summary buffer that can raise DCP's upper nudge threshold.
+- **DCP** shows the explicit global `compress.minContextLimit` and `compress.maxContextLimit` from `dcp.jsonc` (or `dcp.json` if absent). A token limit is converted to a percentage of the window shown on the bar. An unreadable or unplottable value is shown as `—` with no marker. The panel does not check plugin load state, assume defaults, or apply model overrides or the active-summary buffer.
 - **OpenCode** subtracts the reserved space (`compaction.buffer` or the native default) from the effective input window: the smaller of `limit.input` and `limit.context` when both are set, or the available limit otherwise. The panel divides the resulting token threshold by the total context limit, not the input limit.
 
 For example, with a **628,000-token** context window and a **500,000-token** input limit, a DCP baseline of `65%` marks **408,200 tokens**. A `15%` OpenCode buffer leaves **425,000 tokens** before auto-compaction: **85% of the input limit**, but **67.7% on the shared bar**.
@@ -90,7 +92,7 @@ cache.read / (input + cache.read + cache.write) × 100%
 | Conversation payloads | OpenCode `session_part` with `session_message` inline content fallback, via `node:sqlite` | Every `1s` |
 | Legacy context window | OpenCode `/api/model` via the Desktop host or local CLI, using the session's directory and `providerID/modelID` | Cached `10s` |
 | OpenCode auto-compaction | OpenCode `/api/config` and `/api/model` via the Desktop host or local CLI, scoped to the session's directory, plus the server version from `/api/info` | Cached `10s` while polling |
-| DCP Compression State | `~/.config/opencode/dcp.jsonc` + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
+| DCP Compression State | `~/.config/opencode/dcp.jsonc` (or `dcp.json`) + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
 | Skills & Rules | `~/.agents/skills/*/SKILL.md` + `~/.config/opencode/AGENTS.md` + project `AGENTS.md` | Cached `5s` |
 
 ---

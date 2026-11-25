@@ -315,14 +315,42 @@ test('the native line refreshes independently of DCP and disappears when disable
   };
 
   await show({ enabled: true, thresholdTokens: 800 }, true);
-  assert.match(panel.html(), /DCP 55% \/ 75% · OpenCode 80%/);
+  assert.match(panel.html(), /DCP — \/ — · OpenCode 80%/);
   assert.match(panel.html(), /left:80%" title="OpenCode Auto Compaction 80% \(800 tokens\)/);
+  assert.doesNotMatch(panel.html(), /class="ctx-tick(?: mid)?"/);
+  assert.match(panel.html(), /Compression Details[\s\S]*0 blocks[\s\S]*No compression records in this session/);
   await show({ enabled: true, thresholdTokens: 700 });
-  assert.match(panel.html(), /DCP 55% \/ 75% · OpenCode 70%/);
+  assert.match(panel.html(), /DCP — \/ — · OpenCode 70%/);
   assert.doesNotMatch(panel.html(), /left:80%/);
   for (const [status, label] of [[{ enabled: false }, 'Off'], [null, 'Unknown']]) {
     await show(status);
-    assert.match(panel.html(), new RegExp(`DCP 55% / 75% · OpenCode ${label}`));
-    assert.doesNotMatch(panel.html(), /ctx-tick native|Hard Limit/);
+    assert.match(panel.html(), new RegExp(`DCP — / — · OpenCode ${label}`));
+    assert.doesNotMatch(panel.html(), /class="ctx-tick|Hard Limit/);
   }
+});
+
+test('renders only DCP thresholds that can be placed on the context bar', async () => {
+  const panel = setup();
+  panel.take('hello');
+  panel.ready(session('alpha', { tokens: 300, limit: 1000 }));
+  const show = async (dcp) => {
+    const req = await panel.takeInspect();
+    panel.settle(req, { ...inspectData('alpha'), dcp });
+    await setImmediate();
+  };
+
+  await show({ minPct: 0, maxPct: null });
+  assert.match(panel.html(), /DCP 0% \/ — · OpenCode 80%/);
+  assert.match(panel.html(), /class="ctx-tick" style="left:0%"/);
+  assert.doesNotMatch(panel.html(), /class="ctx-tick mid"/);
+
+  panel.tick();
+  await show({ minPct: -5, maxTokens: 625 });
+  assert.match(panel.html(), /DCP — \/ 62.5% · OpenCode 80%/);
+  assert.doesNotMatch(panel.html(), /class="ctx-tick"/);
+  assert.match(panel.html(), /class="ctx-tick mid" style="left:62.5%"/);
+
+  panel.update(session('alpha', { tokens: 300, limit: null }));
+  assert.match(panel.html(), /DCP — \/ — · OpenCode Unknown/);
+  assert.doesNotMatch(panel.html(), /class="ctx-tick/);
 });

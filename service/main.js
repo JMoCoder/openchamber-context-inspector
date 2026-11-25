@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { readDcpThresholds } from './dcp-thresholds.mjs';
 import { readSessionPayloads } from './session-payloads.mjs';
 import { cacheHitRate } from '../shared/cache-usage.mjs';
 import { autoCompaction } from '../shared/compaction.mjs';
@@ -26,22 +27,12 @@ const XDG_DATA =
     : path.join(HOME, '.local', 'share'));
 
 const AGENTS_MD = path.join(XDG_CONFIG, 'opencode', 'AGENTS.md');
-const DCP_CONFIG = path.join(XDG_CONFIG, 'opencode', 'dcp.jsonc');
+const DCP_CONFIG_DIR = path.join(XDG_CONFIG, 'opencode');
 const DCP_STORAGE_DIR = path.join(XDG_DATA, 'opencode', 'storage', 'plugin', 'dcp');
 const OPENCODE_DB = path.join(XDG_DATA, 'opencode', 'opencode.db');
 
 function inspectDcp(sessionId) {
-  let minPct = 55;
-  let maxPct = 75;
-  try {
-    if (fs.existsSync(DCP_CONFIG)) {
-      const raw = fs.readFileSync(DCP_CONFIG, 'utf8');
-      const mMin = raw.match(/"minContextLimit"\s*:\s*"(\d+(?:\.\d+)?)%"/);
-      const mMax = raw.match(/"maxContextLimit"\s*:\s*"(\d+(?:\.\d+)?)%"/);
-      if (mMin) minPct = Number(mMin[1]);
-      if (mMax) maxPct = Number(mMax[1]);
-    }
-  } catch {}
+  const thresholds = readDcpThresholds(DCP_CONFIG_DIR);
 
   const blocks = [];
   let prunedToolCount = 0;
@@ -86,8 +77,7 @@ function inspectDcp(sessionId) {
   } catch {}
 
   return {
-    minPct,
-    maxPct,
+    ...thresholds,
     totalSavedTokens,
     prunedToolCount,
     prunedToolTokens,
