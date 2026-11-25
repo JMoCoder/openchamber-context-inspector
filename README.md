@@ -15,7 +15,7 @@ See exactly where your context budget goes in real time: **MCP server schemas & 
 - **Full Inspector Panel**:
   - **Top KPI Cards**: Context window usage percentage (`%` + limit / remaining + baseline / dynamic tokens) and Latest Cache Hit Rate (`%` + cache read / cache write / incremental input / output tokens).
   - **Total Context & Threshold Bar**: Visualizes current usage alongside the two DCP nudge thresholds and the model's OpenCode auto-compaction threshold when available.
-  - **DCP Compression Details**: Live readout from `@tarquinen/opencode-dcp` storage (`~/.local/share/opencode/storage/plugin/dcp/<sessionId>.json`), showing total compressed tokens, active `@b1@` range blocks (`before → after`), and auto-pruned tool outputs.
+  - **DCP Compression Details**: Reads the selected session's `@tarquinen/opencode-dcp` state (`~/.local/share/opencode/storage/plugin/dcp/<sessionId>.json`), showing cumulative tokens saved, stored compression blocks (`before → after`), and pruned tool outputs. It does not list OpenCode's native compactions.
   - **Context Breakdown Card**: Individual horizontal meter bars matching the Work Status style.
   - **Enabled and Disabled MCPs**: Separate cards show each group's server names and count. On Desktop they prefer the host's MCP list for the session directory and fall back to the existing config-based inventory when unavailable. An enabled server may still be disconnected; these lists do not change token accounting.
   - **Foldable Module Tree (`MODULES`)**: Collapsible rail groups for `Conversation Payloads`, `MCP Servers`, and `System & Baseline`.
@@ -66,6 +66,12 @@ For example, with a **628,000-token** context window and a **500,000-token** inp
 On OpenCode 2.3 and newer V2 releases, the extension reads config layers and model limits for the session's directory. On Desktop it uses the host-selected OpenCode server through OpenChamber's loopback API at the port recorded in the host's `settings.json` (`desktopLocalPort`). It does not start or fall back to a separate CLI service. On a standalone Web host it uses the local OpenCode CLI; this does not necessarily reflect settings on a different server. `compaction.buffer` can be a percentage or a token count. A percentage represents space kept free, not the used percentage at which compaction starts.
 
 The line is separate from DCP and is not a provider hard limit. It is hidden when `compaction.auto` is off, the API data is unavailable, or the chart and catalog disagree on the window. `compaction.keep.tokens` does not move the line.
+
+### Reading compression details
+
+When DCP detects a new completed OpenCode compaction, it clears the previous DCP compression blocks and tool-pruning entries for that session but keeps the cumulative DCP token savings.
+
+The card can therefore show a nonzero **Compressed** total alongside **No compression records in this session**. The empty message means there are no detail rows in the current DCP state, not that the session has never been compacted. The total is tokens saved by DCP, not a count of compactions or a measure of savings from OpenCode's native compaction.
 
 ### Conversation payload estimates
 
