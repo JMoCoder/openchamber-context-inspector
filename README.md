@@ -65,6 +65,12 @@ On OpenCode 2.3 and newer V2 releases, the extension reads the local OpenCode CL
 
 The line is separate from DCP and is not a provider hard limit. It is hidden when `compaction.auto` is off, the local data is unavailable, or the chart and local catalog disagree on the window. Settings available only on a different OpenCode server are not read by the local CLI. `compaction.keep.tokens` does not move the line.
 
+### Conversation payload estimates
+
+**Tool Payloads** estimates the size of recorded tool inputs, results, and errors (native tools and MCP alike). It is separate from the MCP tool schema estimate. The count is the number of recorded calls. **Assistant Messages** counts assistant records and estimates their saved text and reasoning; a tool-only record can have no assistant text.
+
+On newer OpenCode V2 databases, the extension reads these parts from `session_part`. It uses inline content on older messages without projected parts. The token split uses character-based estimates that are scaled to the conversation budget when usage is available; it is not a per-category tokenizer or billing measurement.
+
 ### Cache hit rate
 
 The cache card uses the latest assistant record with input usage in the current session, not a session-wide aggregate. It follows OpenChamber's input-token formula:
@@ -80,6 +86,7 @@ cache.read / (input + cache.read + cache.write) × 100%
 | Live MCP Status | OpenCode `/api/mcp` via `host.request` + merged `opencode.json` files | Every `1s` |
 | Session Token Ledger | `~/.local/share/opencode/opencode.db` (`session_v2`, `session_message`) via `node:sqlite` | Every `1s` |
 | Host context window | OpenChamber extension bridge `ready.session.context` / `session.context` | When the host publishes a reading |
+| Conversation payloads | OpenCode `session_part` with `session_message` inline content fallback, via `node:sqlite` | Every `1s` |
 | Legacy context window | Local OpenCode CLI `/api/model`, using the session's directory and `providerID/modelID` | Cached `10s` |
 | OpenCode auto-compaction | Local OpenCode CLI `/api/config` and `/api/model` scoped to the session's directory, plus the server version from `/api/info` | Cached `10s` while polling |
 | DCP Compression State | `~/.config/opencode/dcp.jsonc` + `~/.local/share/opencode/storage/plugin/dcp/<sid>.json` | Every `1s` |
@@ -104,6 +111,7 @@ openchamber-context-inspector/
 │   ├── cache-usage.mjs  # Official input-token cache ratio (latest record)
 │   └── cache-usage.test.mjs # Cache ratio regression tests
 ├── service/
+│   ├── session-payloads.mjs # V2 and legacy conversation payload estimates
 │   └── main.js          # Host service (node:sqlite + MCP/Skill/DCP inspector)
 ├── CHANGELOG.md
 ├── LICENSE              # MIT

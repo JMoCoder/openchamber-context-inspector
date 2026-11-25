@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { readSessionPayloads } from './session-payloads.mjs';
 import { cacheHitRate } from '../shared/cache-usage.mjs';
 import { autoCompaction } from '../shared/compaction.mjs';
 import { createOpenCodeReader } from './opencode.mjs';
@@ -302,58 +303,6 @@ async function querySessionDb(sessionId) {
       modelInfo = row.model ? JSON.parse(row.model) : {};
     } catch {}
 
-    const msgs = db.prepare('SELECT type, seq, data FROM session_message WHERE session_id=? ORDER BY seq ASC').all(row.id);
-
-    let userChars = 0;
-    let assistantChars = 0;
-    let reasoningChars = 0;
-    let toolChars = 0;
-    let userCount = 0;
-    let assistantCount = 0;
-    let toolCallCount = 0;
-    let lastTokens = null;
-
-    for (const m of msgs) {
-      let d;
-      try {
-        d = JSON.parse(m.data);
-      } catch {
-        continue;
-      }
-      if (m.type === 'user') {
-        userCount++;
-        userChars += String(d.text || '').length;
-        if (Array.isArray(d.content)) {
-          for (const part of d.content) {
-            if (part && typeof part === 'object') userChars += String(part.text || '').length;
-          }
-        }
-      } else if (m.type === 'assistant') {
-        assistantCount++;
-        const tok = d.tokens;
-        if (tok && typeof tok === 'object' && ((tok.input || 0) > 0 || (tok.cache?.read || 0) > 0 || (tok.cache?.write || 0) > 0)) {
-          lastTokens = tok;
-        }
-        if (Array.isArray(d.content)) {
-          for (const item of d.content) {
-            if (!item || typeof item !== 'object') continue;
-            if (item.type === 'text') {
-              assistantChars += String(item.text || '').length + String(item.content || '').length;
-            } else if (item.type === 'reasoning') {
-              reasoningChars += String(item.text || '').length + String(item.content || '').length;
-            } else if (item.type === 'tool') {
-              toolCallCount++;
-              const st = item.state || {};
-              toolChars +=
-                JSON.stringify(st.input || '').length +
-                JSON.stringify(st.content || '').length +
-                String(st.error || '').length;
-            }
-          }
-        }
-      }
-    }
-
     return {
       found: true,
       sessionId: row.id,
@@ -363,15 +312,7 @@ async function querySessionDb(sessionId) {
       createdAt: row.time_created,
       updatedAt: row.time_updated,
       cost: row.cost || 0,
-      userCount,
-      assistantCount,
-      toolCallCount,
-      rawEstimate: {
-        userTokens: userChars > 0 ? Math.max(1, Math.floor(userChars / 4)) : 0,
-        assistantTokens: assistantChars + reasoningChars > 0 ? Math.max(1, Math.floor((assistantChars + reasoningChars) / 4)) : 0,
-        toolTokens: toolChars > 0 ? Math.max(1, Math.floor(toolChars / 4)) : 0,
-      },
-      lastTurnTokens: lastTokens,
+      ...readSessionPayloads(db, row.id),
     };
   } catch (err) {
     dbConn = null;
